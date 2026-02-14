@@ -21,7 +21,6 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
 
   late final String _path;
   late final String _backupPassword;
-  int? _stackId;
   late ProjectorTraversalMode _traversalMode;
   late bool _videoStayInfinite;
   late bool _audioStayInfinite;
@@ -34,7 +33,6 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
         ? (args?["path"] as String)
         : "/";
     _backupPassword = (args?["backupPassword"] as String?) ?? "";
-    _stackId = args?["stackId"] as int?;
 
     final config = ProjectorConfigStore.load();
     _traversalMode = config.traversalMode;
@@ -212,7 +210,6 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
 
     Get.toNamed(
       NamedRouter.projectorPlayer,
-      id: _stackId,
       arguments: {
         "path": _path,
         "backupPassword": _backupPassword,

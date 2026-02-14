@@ -291,9 +291,7 @@ class _FileListScreenState extends State<FileListScreen>
                 arguments: {
                   "path": path,
                   "backupPassword": _password ?? "",
-                  "stackId": stackId,
                 },
-                id: stackId,
               );
             }
             break;

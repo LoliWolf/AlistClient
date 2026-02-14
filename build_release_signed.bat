@@ -9,23 +9,48 @@ set "JAVA17_HOME=C:\Program Files\Java\jdk-17"
 if exist "%JAVA17_HOME%\bin\java.exe" (
   set "JAVA_HOME=%JAVA17_HOME%"
   set "PATH=%JAVA_HOME%\bin;%PATH%"
-  echo [INFO] Using JAVA_HOME=%JAVA_HOME%
+  echo [INFO] Using JAVA_HOME=!JAVA_HOME!
 ) else (
-  echo [WARN] Java 17 not found at "%JAVA17_HOME%". Keep current JAVA_HOME.
+  echo [ERROR] Java 17 not found at "%JAVA17_HOME%".
+  echo [ERROR] Please install JDK 17 at this path, then rerun this script.
+  goto :fail
 )
 
 set "FVM_BAT=%LOCALAPPDATA%\Pub\Cache\bin\fvm.bat"
+set "FVM_CONFIG=.fvm\fvm_config.json"
 set "USE_FVM=0"
-if exist ".fvm\fvm_config.json" (
+set "FVM_SDK_VERSION="
+if exist "%FVM_CONFIG%" (
   if exist "%FVM_BAT%" (
     set "USE_FVM=1"
     echo [INFO] Using FVM: %FVM_BAT%
+    for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "(Get-Content '%FVM_CONFIG%' | ConvertFrom-Json).flutterSdkVersion"`) do (
+      set "FVM_SDK_VERSION=%%v"
+    )
+    if defined FVM_SDK_VERSION (
+      echo [INFO] FVM target SDK: !FVM_SDK_VERSION!
+    ) else (
+      echo [WARN] Could not read flutterSdkVersion from %FVM_CONFIG%, fallback to system flutter.
+      set "USE_FVM=0"
+    )
   ) else (
     echo [WARN] .fvm found but fvm.bat not found in Pub Cache, fallback to flutter.
   )
 )
 
-echo [STEP 1/4] flutter pub get
+if "%USE_FVM%"=="1" (
+  echo [STEP 0/4] ensure FVM SDK installed
+  call "%FVM_BAT%" list | findstr /I /C:"!FVM_SDK_VERSION!" >nul
+  if errorlevel 1 (
+    echo [INFO] Installing Flutter SDK !FVM_SDK_VERSION! via FVM...
+    call "%FVM_BAT%" install !FVM_SDK_VERSION!
+    if errorlevel 1 goto :fail
+  ) else (
+    echo [INFO] Flutter SDK !FVM_SDK_VERSION! already installed.
+  )
+)
+
+echo [STEP 1/4] pub get
 if "%USE_FVM%"=="1" (
   call "%FVM_BAT%" flutter pub get
 ) else (
@@ -79,7 +104,7 @@ if not exist "%ZIPALIGN%" (
 )
 
 echo [STEP 3/4] verify app-release.apk signature
-"%APK_SIGNER%" verify "%RELEASE_APK%" >nul 2>&1
+call "%APK_SIGNER%" verify "%RELEASE_APK%" >nul 2>&1
 if not errorlevel 1 (
   copy /Y "%RELEASE_APK%" "%SIGNED_APK%" >nul
   echo [INFO] app-release.apk is already signed.
@@ -97,7 +122,7 @@ if not exist "%DEBUG_KEYSTORE%" (
 "%ZIPALIGN%" -f 4 "%RELEASE_APK%" "%ALIGNED_APK%"
 if errorlevel 1 goto :fail
 
-"%APK_SIGNER%" sign ^
+call "%APK_SIGNER%" sign ^
   --ks "%DEBUG_KEYSTORE%" ^
   --ks-key-alias androiddebugkey ^
   --ks-pass pass:android ^
@@ -106,7 +131,7 @@ if errorlevel 1 goto :fail
   "%ALIGNED_APK%"
 if errorlevel 1 goto :fail
 
-"%APK_SIGNER%" verify --verbose "%SIGNED_APK%"
+call "%APK_SIGNER%" verify --verbose "%SIGNED_APK%"
 if errorlevel 1 goto :fail
 
 :done
@@ -117,4 +142,3 @@ exit /b 0
 :fail
 echo [FAILED] Build or signing failed.
 exit /b 1
-
