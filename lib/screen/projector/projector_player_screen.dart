@@ -7,6 +7,7 @@ import 'package:alist/entity/file_list_resp_entity.dart';
 import 'package:alist/l10n/intl_keys.dart';
 import 'package:alist/net/dio_utils.dart';
 import 'package:alist/screen/projector/projector_models.dart';
+import 'package:alist/util/download/download_manager.dart';
 import 'package:alist/util/file_password_helper.dart';
 import 'package:alist/util/file_type.dart';
 import 'package:alist/util/file_utils.dart';
@@ -30,8 +31,7 @@ class ProjectorPlayerScreen extends StatefulWidget {
 }
 
 class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
-  final FlutterAliplayer _videoPlayer =
-      FlutterAliPlayerFactory.createAliPlayer();
+  late final FlutterAliplayer _videoPlayer;
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ProxyServer _proxyServer = Get.find();
 
@@ -41,7 +41,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   late final _ProjectorRepository _repository;
   late final _ProjectorTraversalSource _source;
 
-  final Set<String> _unsupportedPaths = {};
+  final Map<String, String> _unsupportedErrors = {};
   StreamSubscription<PlayerState>? _audioStateSubscription;
   Timer? _countdownTimer;
 
@@ -50,7 +50,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   String _sourcePathHint = "/";
   bool _loading = true;
   bool _advancing = false;
-  bool _showOverlay = true;
+  bool _showOverlay = false;
   int _countdownSeconds = 0;
   bool _imageFailedScheduled = false;
   String? _errorText;
@@ -58,10 +58,18 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _videoPlayer = FlutterAliPlayerFactory.createAliPlayer();
     _initArgs();
     _repository = _ProjectorRepository(backupPassword: _backupPassword);
     _source = _createSource(_config.traversalMode);
-    _initPlayerCallbacks();
+    
+    _initPlayerAndStart();
+  }
+
+  Future<void> _initPlayerAndStart() async {
+    debugPrint("Projector: _initPlayerAndStart begin");
+    await _initPlayerCallbacks();
+    debugPrint("Projector: _initPlayerCallbacks done");
     _enableImmersiveMode();
     _nextMedia();
   }
@@ -89,11 +97,20 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     }
   }
 
-  void _initPlayerCallbacks() {
+  Future<void> _initPlayerCallbacks() async {
     _videoPlayer.setAutoPlay(true);
     if (Platform.isAndroid) {
-      _videoPlayer.setScalingMode(FlutterAvpdef.AVP_SCALINGMODE_SCALETOFILL);
+      await _videoPlayer.setScalingMode(FlutterAvpdef.AVP_SCALINGMODE_SCALETOFILL);
     }
+    
+    try {
+      var cacheDir = await DownloadManager.findDownloadDir("video");
+      FlutterAliplayer.enableLocalCache(
+          true, "${1024 * 100}", cacheDir.path, DocTypeForIOS.caches);
+    } catch (e) {
+      debugPrint("Projector init cache failed: $e");
+    }
+
     _videoPlayer.setOnCompletion((playerId) {
       _onCurrentMediaCompleted();
     });
@@ -148,7 +165,9 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     _audioStateSubscription?.cancel();
     _audioPlayer.stop();
     _audioPlayer.dispose();
-    _videoPlayer.stop();
+    _videoPlayer.stop().catchError((e) {
+      debugPrint("Ignored FlutterAliplayer.stop exception: $e");
+    });
     _videoPlayer.destroy();
     _repository.dispose();
     _proxyServer.stop();
@@ -156,17 +175,33 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     super.dispose();
   }
 
+  String _getDebugDump() {
+    final buffer = StringBuffer();
+    buffer.writeln("=== Debug Info ===");
+    buffer.writeln("Unsupported Paths (${_unsupportedErrors.length}):");
+    for (final entry in _unsupportedErrors.entries) {
+      buffer.writeln("  - ${entry.key}");
+      buffer.writeln("    Error: ${entry.value}");
+    }
+    buffer.writeln(_repository.getDebugInfo());
+    return buffer.toString();
+  }
+
   Future<void> _nextMedia() async {
+    debugPrint("Projector: _nextMedia called");
     if (_advancing) {
+      debugPrint("Projector: _nextMedia skipped (already advancing)");
       return;
     }
     _advancing = true;
     _cancelCountdown();
 
     try {
+      debugPrint("Projector: starting traversal loop");
       for (int i = 0; i < 400; i++) {
         final nextItem = await _source.next();
         if (nextItem == null) {
+          debugPrint("Projector: source exhausted");
           if (!mounted) {
             return;
           }
@@ -174,22 +209,32 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
             _loading = false;
             _currentItem = null;
             _currentUrl = null;
-            _errorText = Intl.projectorPlayer_noMedia.tr;
+            _errorText = "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}";
           });
           return;
         }
         _sourcePathHint = _source.currentPathHint ?? _rootPath;
 
-        if (_unsupportedPaths.contains(nextItem.path)) {
+        if (_unsupportedErrors.containsKey(nextItem.path)) {
+          debugPrint("Projector: skipping known unsupported ${nextItem.path}");
           continue;
         }
 
-        final success = await _playItem(nextItem);
-        if (success) {
+        // Ignore macOS metadata files starting with ._
+        if (nextItem.name.startsWith("._")) {
+           _unsupportedErrors[nextItem.path] = "MacOS metadata file";
+           continue;
+        }
+
+        debugPrint("Projector: trying to play ${nextItem.path}");
+        final error = await _playItem(nextItem);
+        if (error == null) {
+          debugPrint("Projector: play success ${nextItem.path}");
           return;
         }
 
-        _unsupportedPaths.add(nextItem.path);
+        debugPrint("Projector: play failed ${nextItem.path}: $error");
+        _unsupportedErrors[nextItem.path] = error;
       }
 
       if (!mounted) {
@@ -197,27 +242,40 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       }
       setState(() {
         _loading = false;
-        _errorText = Intl.projectorPlayer_noMedia.tr;
+        _errorText = "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}";
       });
+    } catch (e, s) {
+      debugPrint("Projector _nextMedia error: $e\n$s");
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _errorText = "${Intl.projectorPlayer_noMedia.tr}\n$e\n\n${_getDebugDump()}";
+        });
+      }
     } finally {
       _advancing = false;
     }
   }
 
-  Future<bool> _playItem(_ProjectorMediaItem item) async {
+  Future<String?> _playItem(_ProjectorMediaItem item) async {
     final url = await FileUtils.makeFileLink(item.path, item.sign,
         toastShowTips: false);
     if (url == null || url.isEmpty) {
-      return false;
+      debugPrint("Projector skip: url is empty for ${item.path}");
+      return "URL generation failed (empty or null)";
     }
 
     _imageFailedScheduled = false;
     _cancelCountdown();
     await _audioPlayer.stop();
-    await _videoPlayer.stop();
+    try {
+      await _videoPlayer.stop();
+    } catch (e) {
+      debugPrint("Ignored FlutterAliplayer.stop exception: $e");
+    }
 
     if (!mounted) {
-      return false;
+      return "Context unmounted";
     }
     setState(() {
       _currentItem = item;
@@ -234,7 +292,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
           });
         }
         _startCountdown(_config.imageStaySeconds);
-        return true;
+        return null;
       case _ProjectorMediaType.video:
         return _playVideo(item, url);
       case _ProjectorMediaType.audio:
@@ -242,7 +300,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     }
   }
 
-  Future<bool> _playVideo(_ProjectorMediaItem item, String url) async {
+  Future<String?> _playVideo(_ProjectorMediaItem item, String url) async {
     try {
       String playUrl = url;
       if (item.provider == "BaiduNetdisk") {
@@ -250,19 +308,20 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
         playUrl = _proxyServer.makeProxyUrl(url,
             headers: {HttpHeaders.userAgentHeader: "pan.baidu.com"}).toString();
       }
+      debugPrint("Projector playing video: ${item.path}, url=$playUrl");
       await _videoPlayer.setUrl(playUrl);
       await _videoPlayer.prepare();
       if (!_config.videoStayInfinite) {
         _startCountdown(_config.videoStaySeconds);
       }
-      return true;
+      return null;
     } catch (e) {
       debugPrint("Projector video play failed: $e");
-      return false;
+      return "Video player error: $e";
     }
   }
 
-  Future<bool> _playAudio(_ProjectorMediaItem item, String url) async {
+  Future<String?> _playAudio(_ProjectorMediaItem item, String url) async {
     try {
       final headers = <String, String>{};
       if (item.provider == "BaiduNetdisk") {
@@ -278,10 +337,10 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       if (!_config.audioStayInfinite) {
         _startCountdown(_config.audioStaySeconds);
       }
-      return true;
+      return null;
     } catch (e) {
       debugPrint("Projector audio play failed: $e");
-      return false;
+      return "Audio player error: $e";
     }
   }
 
@@ -291,7 +350,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
   void _skipCurrentAsUnsupported() {
     if (_currentItem != null) {
-      _unsupportedPaths.add(_currentItem!.path);
+      _unsupportedErrors[_currentItem!.path] = "Skipped by user or player error";
     }
     SmartDialog.showToast(Intl.projectorPlayer_skipUnsupported.tr);
     _nextMedia();
@@ -402,10 +461,19 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   Widget _buildMediaBody(BuildContext context) {
     if (_errorText != null) {
       return Center(
-        child: Text(
-          _errorText!,
-          style: const TextStyle(color: Colors.white),
-          textAlign: TextAlign.center,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: _errorText!));
+              SmartDialog.showToast(Intl.tips_link_copied.tr);
+            },
+            child: Text(
+              _errorText!,
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          ),
         ),
       );
     }
@@ -600,57 +668,68 @@ class _ProjectorRepository {
 
   Future<_ProjectorDirectorySnapshot?> _requestDirectory(String path) async {
     final completer = Completer<_ProjectorDirectorySnapshot?>();
-    final password = await FilePasswordHelper()
-        .fastFindPassword(path, backupPassword: backupPassword);
-    final body = {
-      "path": path,
-      "password": password ?? "",
-      "page": 1,
-      "per_page": 0,
-      "refresh": false,
-    };
-    DioUtils.instance.requestNetwork<FileListRespEntity>(
-      Method.post,
-      "fs/list",
-      cancelToken: _cancelToken,
-      params: body,
-      onSuccess: (data) {
-        final medias = <_ProjectorMediaItem>[];
-        final childFolders = <String>[];
-        final provider = data?.provider;
-        for (final file in data?.content ?? <FileListRespContent>[]) {
-          final completePath = file.getCompletePath(path);
-          if (file.isDir) {
-            childFolders.add(completePath);
-          } else {
-            final mediaType = _mapFileType(file.getFileType());
-            if (mediaType != null) {
-              medias.add(_ProjectorMediaItem(
-                name: file.name,
-                path: completePath,
-                sign: file.sign,
-                provider: provider,
-                mediaType: mediaType,
-              ));
+    try {
+      final password = await FilePasswordHelper()
+          .fastFindPassword(path, backupPassword: backupPassword);
+      final body = {
+        "path": path,
+        "password": password ?? "",
+        "page": 1,
+        "per_page": 0,
+        "refresh": false,
+      };
+      DioUtils.instance.requestNetwork<FileListRespEntity>(
+        Method.post,
+        "fs/list",
+        cancelToken: _cancelToken,
+        params: body,
+        onSuccess: (data) {
+          try {
+            final medias = <_ProjectorMediaItem>[];
+            final childFolders = <String>[];
+            final provider = data?.provider;
+            for (final file in data?.content ?? <FileListRespContent>[]) {
+              final completePath = file.getCompletePath(path);
+              if (file.isDir) {
+                childFolders.add(completePath);
+              } else {
+                final mediaType = _mapFileType(file.getFileType());
+                if (mediaType != null) {
+                  medias.add(_ProjectorMediaItem(
+                    name: file.name,
+                    path: completePath,
+                    sign: file.sign,
+                    provider: provider,
+                    mediaType: mediaType,
+                  ));
+                }
+              }
             }
-          }
-        }
-        medias.sort((a, b) => NaturalSort.compare(a.name, b.name));
-        childFolders.sort((a, b) => NaturalSort.compare(a, b));
+            medias.sort((a, b) => NaturalSort.compare(a.name, b.name));
+            childFolders.sort((a, b) => NaturalSort.compare(a, b));
 
-        final snapshot = _ProjectorDirectorySnapshot(
-          medias: medias,
-          childFolders: childFolders,
-        );
-        _cache[path] = snapshot;
-        completer.complete(snapshot);
-      },
-      onError: (code, msg) {
-        debugPrint("Projector list directory failed: path=$path, msg=$msg");
-        _cache[path] = null;
-        completer.complete(null);
-      },
-    );
+            final snapshot = _ProjectorDirectorySnapshot(
+              medias: medias,
+              childFolders: childFolders,
+            );
+            _cache[path] = snapshot;
+            completer.complete(snapshot);
+          } catch (e, s) {
+            debugPrint("Projector parse directory failed: $e\n$s");
+            _cache[path] = null;
+            completer.complete(null);
+          }
+        },
+        onError: (code, msg) {
+          debugPrint("Projector list directory failed: path=$path, msg=$msg");
+          _cache[path] = null;
+          completer.complete(null);
+        },
+      );
+    } catch (e, s) {
+      debugPrint("Projector request directory error: $e\n$s");
+      completer.complete(null);
+    }
     return completer.future;
   }
 
@@ -669,6 +748,28 @@ class _ProjectorRepository {
 
   void dispose() {
     _cancelToken.cancel();
+  }
+
+  String getDebugInfo() {
+    final buffer = StringBuffer();
+    buffer.writeln("Cache dump:");
+    for (final entry in _cache.entries) {
+      buffer.writeln("Path: ${entry.key}");
+      final snapshot = entry.value;
+      if (snapshot == null) {
+        buffer.writeln("  <Failed or Loading>");
+      } else {
+        buffer.writeln("  Medias (${snapshot.medias.length}):");
+        for (final m in snapshot.medias) {
+          buffer.writeln("    - ${m.name} (${m.mediaType})");
+        }
+        buffer.writeln("  Folders (${snapshot.childFolders.length}):");
+        for (final f in snapshot.childFolders) {
+          buffer.writeln("    - $f");
+        }
+      }
+    }
+    return buffer.toString();
   }
 }
 
@@ -696,7 +797,13 @@ class _OrderedDfsTraversalSource implements _ProjectorTraversalSource {
 
   @override
   Future<_ProjectorMediaItem?> next() async {
+    int iterations = 0;
+    const int maxIterations = 1000;
+
     while (true) {
+      if (iterations++ > maxIterations) {
+        return null;
+      }
       if (_stack.isEmpty) {
         _stack.add(_OrderedDfsFrame(_rootPath));
       }
@@ -749,7 +856,13 @@ class _RandomWalkTraversalSource implements _ProjectorTraversalSource {
 
   @override
   Future<_ProjectorMediaItem?> next() async {
+    int iterations = 0;
+    const int maxIterations = 1000;
+
     while (true) {
+      if (iterations++ > maxIterations) {
+        return null;
+      }
       if (_pathStack.isEmpty) {
         _pathStack.add(_rootPath);
       }
