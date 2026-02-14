@@ -68,9 +68,19 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
   Future<void> _initPlayerAndStart() async {
     debugPrint("Projector: _initPlayerAndStart begin");
-    await _initPlayerCallbacks();
+    try {
+      await _initPlayerCallbacks();
+    } catch (e) {
+      debugPrint("Projector: _initPlayerCallbacks failed: $e");
+    }
     debugPrint("Projector: _initPlayerCallbacks done");
-    _enableImmersiveMode();
+    
+    try {
+      await _enableImmersiveMode();
+    } catch (e) {
+      debugPrint("Projector: _enableImmersiveMode failed: $e");
+    }
+    
     _nextMedia();
   }
 
@@ -100,7 +110,12 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   Future<void> _initPlayerCallbacks() async {
     _videoPlayer.setAutoPlay(true);
     if (Platform.isAndroid) {
-      await _videoPlayer.setScalingMode(FlutterAvpdef.AVP_SCALINGMODE_SCALETOFILL);
+      try {
+        await _videoPlayer.setScalingMode(FlutterAvpdef.AVP_SCALINGMODE_SCALETOFILL)
+            .timeout(const Duration(milliseconds: 500));
+      } catch (e) {
+        debugPrint("Projector: setScalingMode failed/timeout: $e");
+      }
     }
     
     try {
@@ -258,6 +273,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   }
 
   Future<String?> _playItem(_ProjectorMediaItem item) async {
+    debugPrint("Projector: _playItem start: ${item.path}");
     final url = await FileUtils.makeFileLink(item.path, item.sign,
         toastShowTips: false);
     if (url == null || url.isEmpty) {
@@ -267,16 +283,24 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
     _imageFailedScheduled = false;
     _cancelCountdown();
+    
+    debugPrint("Projector: stopping audio player");
     await _audioPlayer.stop();
+    
+    debugPrint("Projector: stopping video player");
     try {
-      await _videoPlayer.stop();
+      // Use timeout to prevent hanging if plugin is unresponsive
+      await _videoPlayer.stop().timeout(const Duration(milliseconds: 500));
     } catch (e) {
       debugPrint("Ignored FlutterAliplayer.stop exception: $e");
     }
 
     if (!mounted) {
+      debugPrint("Projector: _playItem context unmounted");
       return "Context unmounted";
     }
+    
+    debugPrint("Projector: setting state loading=true");
     setState(() {
       _currentItem = item;
       _currentUrl = url;
@@ -286,10 +310,16 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
     switch (item.mediaType) {
       case _ProjectorMediaType.image:
+        debugPrint("Projector: type is image");
         if (mounted) {
-          setState(() {
-            _loading = false;
-          });
+          // Delay slightly to ensure loading spinner is seen if needed, but mainly to break sync flow
+          await Future.delayed(const Duration(milliseconds: 50));
+          if (mounted) {
+             debugPrint("Projector: setting state loading=false");
+             setState(() {
+               _loading = false;
+             });
+          }
         }
         _startCountdown(_config.imageStaySeconds);
         return null;
