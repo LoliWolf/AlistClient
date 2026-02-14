@@ -273,7 +273,7 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
 
         try {
             val packageInfo = context.packageManager.getPackageInfo(packageName, 0)
-            val isInstalled = packageInfo.applicationInfo.enabled
+            val isInstalled = packageInfo.applicationInfo?.enabled ?: false
             result.success(isInstalled)
         } catch (exc: PackageManager.NameNotFoundException) {
             result.success(false)

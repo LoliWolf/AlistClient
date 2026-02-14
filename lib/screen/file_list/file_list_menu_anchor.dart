@@ -47,6 +47,12 @@ final menuGroupOperations = MenuGroupEntity(
       name: Intl.fileList_menu_fileNameLines.tr,
       iconData: Icons.line_weight_rounded,
     ),
+    MenuItemEntity(
+      menuGroupId: MenuGroupId.operations,
+      menuId: MenuId.projector,
+      name: Intl.fileList_menu_projector.tr,
+      iconData: Icons.slideshow_rounded,
+    ),
   ],
 );
 
@@ -84,7 +90,8 @@ class FileListMenuAnchor extends StatelessWidget {
     const menuWidth = 180.0;
     return MenuAnchor(
       style: const MenuStyle(
-          fixedSize: MaterialStatePropertyAll(Size.fromWidth(menuWidth))),
+        fixedSize: MaterialStatePropertyAll(Size.fromWidth(menuWidth)),
+      ),
       controller: controller.menuController,
       anchorTapClosesMenu: true,
       onOpen: () {
@@ -123,15 +130,15 @@ class FileListMenuAnchor extends StatelessWidget {
     bool sortByUp,
     OnMenuClickCallback? onMenuClickCallback,
   ) {
-    List<Widget> menus = [
+    final menus = <Widget>[
       SizedBox(
         width: menuWidth,
-      )
+      ),
     ];
     if (canWrite) {
       _addMenus(menus, menuGroupOperations, onMenuClickCallback);
     } else {
-      final menuGroupOperations = MenuGroupEntity(
+      final readonlyGroup = MenuGroupEntity(
         menuGroupId: MenuGroupId.operations,
         children: [
           MenuItemEntity(
@@ -145,10 +152,16 @@ class FileListMenuAnchor extends StatelessWidget {
             menuId: MenuId.configFileNameLines,
             name: Intl.fileList_menu_fileNameLines.tr,
             iconData: Icons.line_weight_rounded,
-          )
+          ),
+          MenuItemEntity(
+            menuGroupId: MenuGroupId.operations,
+            menuId: MenuId.projector,
+            name: Intl.fileList_menu_projector.tr,
+            iconData: Icons.slideshow_rounded,
+          ),
         ],
       );
-      _addMenus(menus, menuGroupOperations, onMenuClickCallback);
+      _addMenus(menus, readonlyGroup, onMenuClickCallback);
     }
     menus.add(
       Container(
@@ -158,7 +171,10 @@ class FileListMenuAnchor extends StatelessWidget {
     );
 
     _addMenus(
-        menus, _buildMenuGroupSort(sortBy, sortByUp), onMenuClickCallback);
+      menus,
+      _buildMenuGroupSort(sortBy, sortByUp),
+      onMenuClickCallback,
+    );
     return menus;
   }
 
@@ -208,10 +224,10 @@ class FileListMenuAnchor extends StatelessWidget {
     MenuGroupEntity menuGroup,
     OnMenuClickCallback? onMenuClickCallback,
   ) {
-    var menuEntities = menuGroup.children;
+    final menuEntities = menuGroup.children;
     for (int i = 0; i < menuEntities.length; i++) {
-      var menuEntity = menuEntities[i];
-      var menu = Obx(() => MenuItemButton(
+      final menuEntity = menuEntities[i];
+      final menu = Obx(() => MenuItemButton(
             onPressed: () {
               if (onMenuClickCallback != null) {
                 if (menuEntity.menuGroupId == MenuGroupId.sort) {
@@ -222,7 +238,7 @@ class FileListMenuAnchor extends StatelessWidget {
                         ? Icons.arrow_upward_rounded
                         : Icons.arrow_downward_rounded;
                   } else {
-                    for (var value in menuEntities) {
+                    for (final value in menuEntities) {
                       if (value == menuEntity) {
                         value.isUp = true;
                         value.iconData.value = Icons.arrow_upward_rounded;
@@ -265,6 +281,7 @@ enum MenuId {
   uploadPhotos,
   uploadFiles,
   configFileNameLines,
+  projector,
 }
 
 class MenuGroupEntity {

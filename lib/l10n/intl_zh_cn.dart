@@ -87,6 +87,7 @@ const translationsZhCN = {
   "fileList_menu_favorite": "收藏",
   "fileList_menu_cancel_favorite": "取消收藏",
   "fileList_menu_fileNameLines": "文件名行数",
+  "fileList_menu_projector": "\u653e\u6620\u673a",
   "fileList_tips_deleting": "删除中...",
   "fileList_tips_renaming": "重命名中...",
   "fileList_tips_noDownloadableFiles": "无可下载的文件",
@@ -222,4 +223,29 @@ const translationsZhCN = {
   "cacheManagement_tips_clearing_cache": "缓存清理中...",
   "playerSettings_player_in_use": "当前播放器",
   "tips_request_raw_url_failed": "获取播放链接失败",
+  "projectorConfig_title": "\u653e\u6620\u673a",
+  "projectorConfig_path": "\u6587\u4ef6\u5939",
+  "projectorConfig_mode": "\u904d\u5386\u6a21\u5f0f",
+  "projectorConfig_mode_orderedDfs": "\u6709\u5e8f\u5faa\u73af (DFS)",
+  "projectorConfig_mode_randomWalk": "\u968f\u673a\u4e0b\u63a2\u904d\u5386",
+  "projectorConfig_mode_randomAll": "\u6574\u6811\u5a92\u4f53\u968f\u673a",
+  "projectorConfig_imageStaySeconds": "\u56fe\u7247\u505c\u7559\u79d2\u6570",
+  "projectorConfig_videoStaySeconds": "\u89c6\u9891\u505c\u7559\u79d2\u6570",
+  "projectorConfig_audioStaySeconds": "\u97f3\u9891\u505c\u7559\u79d2\u6570",
+  "projectorConfig_videoStayInfinite":
+      "\u89c6\u9891\u65e0\u9650\u505c\u7559 (\u64ad\u5b8c\u81ea\u52a8\u4e0b\u4e00\u4e2a)",
+  "projectorConfig_audioStayInfinite":
+      "\u97f3\u9891\u65e0\u9650\u505c\u7559 (\u64ad\u5b8c\u81ea\u52a8\u4e0b\u4e00\u4e2a)",
+  "projectorConfig_start": "\u5f00\u59cb\u653e\u6620",
+  "projectorConfig_invalidSeconds":
+      "\u8bf7\u8f93\u5165\u5927\u4e8e 0 \u7684\u79d2\u6570",
+  "projectorPlayer_loading": "\u52a0\u8f7d\u5a92\u4f53\u4e2d...",
+  "projectorPlayer_noMedia":
+      "\u5f53\u524d\u76ee\u5f55\u6811\u6ca1\u6709\u53ef\u64ad\u653e\u5a92\u4f53",
+  "projectorPlayer_countdown": "\u4e0b\u4e00\u4e2a\u5012\u8ba1\u65f6",
+  "projectorPlayer_autoNextOnComplete":
+      "\u64ad\u653e\u5b8c\u6210\u540e\u81ea\u52a8\u4e0b\u4e00\u4e2a",
+  "projectorPlayer_skipUnsupported":
+      "\u5f53\u524d\u5a92\u4f53\u4e0d\u652f\u6301\uff0c\u5df2\u8df3\u8fc7",
+  "projectorPlayer_scanning": "\u6b63\u5728\u626b\u63cf\u5a92\u4f53\u6811...",
 };

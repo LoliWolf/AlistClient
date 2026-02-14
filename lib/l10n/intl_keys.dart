@@ -1,4 +1,4 @@
-class Intl {
+﻿class Intl {
   static const String appName = "appName";
   static const String screenName_login = "screenName_login";
   static const String screenName_fileListRoot = "screenName_fileListRoot";
@@ -86,6 +86,7 @@ class Intl {
   static const String fileList_menu_cancel_favorite = "fileList_menu_cancel_favorite";
   static const String fileList_menu_rename = "fileList_menu_rename";
   static const String fileList_menu_fileNameLines = "fileList_menu_fileNameLines";
+  static const String fileList_menu_projector = "fileList_menu_projector";
   static const String fileList_tips_noDownloadableFiles = "fileList_tips_noDownloadableFiles";
   static const String fileList_tips_deleting = "fileList_tips_deleting";
   static const String fileList_tips_renaming = "fileList_tips_renaming";
@@ -217,4 +218,23 @@ class Intl {
   static const String cacheManagement_tips_clearing_cache = "cacheManagement_tips_clearing_cache";
   static const String playerSettings_player_in_use = "playerSettings_player_in_use";
   static const String tips_request_raw_url_failed = "tips_request_raw_url_failed";
+  static const String projectorConfig_title = "projectorConfig_title";
+  static const String projectorConfig_path = "projectorConfig_path";
+  static const String projectorConfig_mode = "projectorConfig_mode";
+  static const String projectorConfig_mode_orderedDfs = "projectorConfig_mode_orderedDfs";
+  static const String projectorConfig_mode_randomWalk = "projectorConfig_mode_randomWalk";
+  static const String projectorConfig_mode_randomAll = "projectorConfig_mode_randomAll";
+  static const String projectorConfig_imageStaySeconds = "projectorConfig_imageStaySeconds";
+  static const String projectorConfig_videoStaySeconds = "projectorConfig_videoStaySeconds";
+  static const String projectorConfig_audioStaySeconds = "projectorConfig_audioStaySeconds";
+  static const String projectorConfig_videoStayInfinite = "projectorConfig_videoStayInfinite";
+  static const String projectorConfig_audioStayInfinite = "projectorConfig_audioStayInfinite";
+  static const String projectorConfig_start = "projectorConfig_start";
+  static const String projectorConfig_invalidSeconds = "projectorConfig_invalidSeconds";
+  static const String projectorPlayer_loading = "projectorPlayer_loading";
+  static const String projectorPlayer_noMedia = "projectorPlayer_noMedia";
+  static const String projectorPlayer_countdown = "projectorPlayer_countdown";
+  static const String projectorPlayer_autoNextOnComplete = "projectorPlayer_autoNextOnComplete";
+  static const String projectorPlayer_skipUnsupported = "projectorPlayer_skipUnsupported";
+  static const String projectorPlayer_scanning = "projectorPlayer_scanning";
 }

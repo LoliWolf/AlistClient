@@ -285,6 +285,16 @@ class _FileListScreenState extends State<FileListScreen>
               SmartDialog.show(builder: (context) {
                 return const ConfigFileNameMaxLinesDialog();
               });
+            } else if (menu.menuId == MenuId.projector) {
+              Get.toNamed(
+                NamedRouter.projectorConfig,
+                arguments: {
+                  "path": path,
+                  "backupPassword": _password ?? "",
+                  "stackId": stackId,
+                },
+                id: stackId,
+              );
             }
             break;
           case MenuGroupId.sort:
