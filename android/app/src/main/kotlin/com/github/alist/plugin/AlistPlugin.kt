@@ -97,13 +97,16 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
                 val index = call.argument<Int>("index")
                 val headers = call.argument<String?>("headers")
                 val playerType = call.argument<String>("playerType")
+                val finishOnComplete = call.argument<Boolean>("finishOnComplete") ?: false
 
                 val intent = Intent(activity, PlayerActivity::class.java)
                 intent.putExtra("videos", videos)
                 intent.putExtra("index", index)
                 intent.putExtra("headers", headers)
                 intent.putExtra("playerType", playerType)
+                intent.putExtra("finishOnComplete", finishOnComplete)
                 activity.startActivity(intent)
+                result.success(true)
             }
 
             "playVideoWithExternalPlayer" -> {

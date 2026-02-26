@@ -40,6 +40,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     private var videosStr = "[]"
     private var headersStr = "{}"
     private var playerType = ""
+    private var finishOnComplete = false
     private var videos: List<VideoItem> = emptyList()
     private var headers: Map<String, String> = emptyMap()
     private var index = 0
@@ -86,6 +87,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
         videosStr = args?.getString("videos") ?: videosStr
         index = args?.getInt("index", 0) ?: index
         playerType = args?.getString("playerType") ?: ""
+        finishOnComplete = args?.getBoolean("finishOnComplete", false) ?: false
         if (videosStr.isNotEmpty()) {
             videos = GsonUtils.parseList(videosStr)
         }
@@ -147,9 +149,14 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
 
                 override fun onAutoComplete(url: String?, vararg objects: Any?) {
                     super.onAutoComplete(url, *objects)
-                    if (!isFinishing && index < videos.lastIndex) {
+                    if (isFinishing) {
+                        return
+                    }
+                    if (index < videos.lastIndex) {
                         FlutterMethods.deleteVideoRecord(videos[index].remotePath)
                         playNext()
+                    } else if (finishOnComplete) {
+                        finish()
                     }
                 }
 

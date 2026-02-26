@@ -7,6 +7,8 @@ import 'package:alist/entity/file_list_resp_entity.dart';
 import 'package:alist/l10n/intl_keys.dart';
 import 'package:alist/net/dio_utils.dart';
 import 'package:alist/screen/projector/projector_models.dart';
+import 'package:alist/util/alist_plugin.dart';
+import 'package:alist/util/constant.dart';
 import 'package:alist/util/download/download_manager.dart';
 import 'package:alist/util/file_password_helper.dart';
 import 'package:alist/util/file_type.dart';
@@ -14,6 +16,7 @@ import 'package:alist/util/file_utils.dart';
 import 'package:alist/util/nature_sort.dart';
 import 'package:alist/util/proxy.dart';
 import 'package:dio/dio.dart';
+import 'package:flustars/flustars.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,7 +34,8 @@ class ProjectorPlayerScreen extends StatefulWidget {
   State<ProjectorPlayerScreen> createState() => _ProjectorPlayerScreenState();
 }
 
-class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
+class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
+    with WidgetsBindingObserver {
   late final FlutterAliplayer _videoPlayer;
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ProxyServer _proxyServer = Get.find();
@@ -58,10 +62,13 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   int _countdownSeconds = 0;
   bool _imageFailedScheduled = false;
   String? _errorText;
+  DateTime _ignoreVideoErrorsUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _awaitingAndroidNativeVideoReturn = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _videoPlayer = FlutterAliPlayerFactory.createAliPlayer();
     _initArgs();
     _repository = _ProjectorRepository(backupPassword: _backupPassword);
@@ -143,7 +150,18 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       _onCurrentMediaCompleted();
     });
     _videoPlayer.setOnError((errorCode, errorExtra, errorMsg, playerId) {
-      _skipCurrentAsUnsupported();
+      if (DateTime.now().isBefore(_ignoreVideoErrorsUntil)) {
+        debugPrint("Projector: ignore transient video error during transition, "
+            "code=$errorCode extra=$errorExtra msg=$errorMsg");
+        return;
+      }
+      if (_currentItem?.mediaType != _ProjectorMediaType.video) {
+        return;
+      }
+      _skipCurrentAsUnsupported(
+        reason:
+            "Video player callback error: code=$errorCode, extra=$errorExtra, msg=$errorMsg",
+      );
     });
     _videoPlayer.setOnStateChanged((newState, playerId) {
       if (!mounted || _currentItem?.mediaType != _ProjectorMediaType.video) {
@@ -189,6 +207,9 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _ignoreVideoErrorsUntil = DateTime.now().add(const Duration(days: 1));
+    _awaitingAndroidNativeVideoReturn = false;
     _countdownTimer?.cancel();
     _audioStateSubscription?.cancel();
     _audioPlayer.stop();
@@ -204,6 +225,18 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     _nextButtonFocusNode.dispose();
     _disableImmersiveMode();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed ||
+        !_awaitingAndroidNativeVideoReturn) {
+      return;
+    }
+    _awaitingAndroidNativeVideoReturn = false;
+    if (_currentItem?.mediaType == _ProjectorMediaType.video) {
+      _nextMedia();
+    }
   }
 
   String _getDebugDump() {
@@ -301,6 +334,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
     _imageFailedScheduled = false;
     _cancelCountdown();
+    _ignoreVideoErrorsUntil =
+        DateTime.now().add(const Duration(milliseconds: 800));
 
     debugPrint("Projector: stopping audio player");
     await _audioPlayer.stop();
@@ -349,6 +384,9 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   }
 
   Future<String?> _playVideo(_ProjectorMediaItem item, String url) async {
+    if (Platform.isAndroid) {
+      return _playVideoWithAndroidNativePlayer(item, url);
+    }
     try {
       String playUrl = url;
       if (item.provider == "BaiduNetdisk") {
@@ -366,6 +404,47 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     } catch (e) {
       debugPrint("Projector video play failed: $e");
       return "Video player error: $e";
+    }
+  }
+
+  Future<String?> _playVideoWithAndroidNativePlayer(
+      _ProjectorMediaItem item, String url) async {
+    try {
+      final headers = <String, String>{};
+      if (item.provider == "BaiduNetdisk") {
+        headers[HttpHeaders.userAgentHeader] = "pan.baidu.com";
+      }
+      final playerType = SpUtil.getString(AlistConstant.playerType);
+      _awaitingAndroidNativeVideoReturn = true;
+      await AlistPlugin.playVideoWithInternalPlayer(
+        [
+          {
+            "name": item.name,
+            "localPath": null,
+            "remotePath": item.path,
+            "sign": item.sign,
+            "provider": item.provider,
+            "thumb": null,
+            "url": url,
+            "modifiedMilliseconds": null,
+            "size": null,
+          }
+        ],
+        0,
+        headers.isEmpty ? null : headers,
+        playerType,
+        finishOnComplete: true,
+      );
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      return null;
+    } catch (e) {
+      _awaitingAndroidNativeVideoReturn = false;
+      debugPrint("Projector Android native video play failed: $e");
+      return "Android video player error: $e";
     }
   }
 
@@ -396,10 +475,10 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     _nextMedia();
   }
 
-  void _skipCurrentAsUnsupported() {
+  void _skipCurrentAsUnsupported({String? reason}) {
     if (_currentItem != null) {
       _unsupportedErrors[_currentItem!.path] =
-          "Skipped by user or player error";
+          reason ?? "Skipped by user or player error";
     }
     SmartDialog.showToast(Intl.projectorPlayer_skipUnsupported.tr);
     _nextMedia();
@@ -621,6 +700,9 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       case _ProjectorMediaType.image:
         return _buildImage(currentUrl);
       case _ProjectorMediaType.video:
+        if (Platform.isAndroid) {
+          return _buildAndroidVideoPlaceholder();
+        }
         final size = MediaQuery.of(context).size;
         return AliPlayerView(
           onCreated: _onVideoViewCreated,
@@ -662,6 +744,24 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.music_note_rounded, color: Colors.white, size: 72),
+          const SizedBox(height: 12),
+          Text(
+            _currentItem?.name ?? "",
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAndroidVideoPlaceholder() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.ondemand_video_rounded,
+              color: Colors.white, size: 72),
           const SizedBox(height: 12),
           Text(
             _currentItem?.name ?? "",
