@@ -2,6 +2,7 @@ import 'package:alist/l10n/intl_keys.dart';
 import 'package:alist/screen/projector/projector_models.dart';
 import 'package:alist/util/named_router.dart';
 import 'package:alist/widget/alist_scaffold.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -18,6 +19,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
   late final TextEditingController _imageStayController;
   late final TextEditingController _videoStayController;
   late final TextEditingController _audioStayController;
+  late final FocusNode _modeFocusNode;
 
   late final String _path;
   late final String _backupPassword;
@@ -44,6 +46,15 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
         TextEditingController(text: config.videoStaySeconds.toString());
     _audioStayController =
         TextEditingController(text: config.audioStaySeconds.toString());
+    _modeFocusNode = FocusNode();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _modeFocusNode.requestFocus();
+      });
+    }
   }
 
   @override
@@ -51,6 +62,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
     _imageStayController.dispose();
     _videoStayController.dispose();
     _audioStayController.dispose();
+    _modeFocusNode.dispose();
     super.dispose();
   }
 
@@ -121,6 +133,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
   Widget _buildModeSelector() {
     return DropdownButtonFormField<ProjectorTraversalMode>(
       value: _traversalMode,
+      focusNode: _modeFocusNode,
       decoration: InputDecoration(
         labelText: Intl.projectorConfig_mode.tr,
         border: const OutlineInputBorder(),

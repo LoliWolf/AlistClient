@@ -14,6 +14,7 @@ import 'package:alist/util/file_utils.dart';
 import 'package:alist/util/nature_sort.dart';
 import 'package:alist/util/proxy.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_aliplayer/flutter_aliplayer.dart';
@@ -34,6 +35,9 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
   late final FlutterAliplayer _videoPlayer;
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ProxyServer _proxyServer = Get.find();
+  final FocusNode _pageFocusNode = FocusNode();
+  final FocusNode _closeButtonFocusNode = FocusNode();
+  final FocusNode _nextButtonFocusNode = FocusNode();
 
   late final String _rootPath;
   late final String _backupPassword;
@@ -62,7 +66,15 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     _initArgs();
     _repository = _ProjectorRepository(backupPassword: _backupPassword);
     _source = _createSource(_config.traversalMode);
-    
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _pageFocusNode.requestFocus();
+      });
+    }
+
     _initPlayerAndStart();
   }
 
@@ -74,13 +86,13 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       debugPrint("Projector: _initPlayerCallbacks failed: $e");
     }
     debugPrint("Projector: _initPlayerCallbacks done");
-    
+
     try {
       await _enableImmersiveMode();
     } catch (e) {
       debugPrint("Projector: _enableImmersiveMode failed: $e");
     }
-    
+
     _nextMedia();
   }
 
@@ -111,13 +123,14 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     _videoPlayer.setAutoPlay(true);
     if (Platform.isAndroid) {
       try {
-        await _videoPlayer.setScalingMode(FlutterAvpdef.AVP_SCALINGMODE_SCALETOFILL)
+        await _videoPlayer
+            .setScalingMode(FlutterAvpdef.AVP_SCALINGMODE_SCALETOFILL)
             .timeout(const Duration(milliseconds: 500));
       } catch (e) {
         debugPrint("Projector: setScalingMode failed/timeout: $e");
       }
     }
-    
+
     try {
       var cacheDir = await DownloadManager.findDownloadDir("video");
       FlutterAliplayer.enableLocalCache(
@@ -186,6 +199,9 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     _videoPlayer.destroy();
     _repository.dispose();
     _proxyServer.stop();
+    _pageFocusNode.dispose();
+    _closeButtonFocusNode.dispose();
+    _nextButtonFocusNode.dispose();
     _disableImmersiveMode();
     super.dispose();
   }
@@ -224,7 +240,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
             _loading = false;
             _currentItem = null;
             _currentUrl = null;
-            _errorText = "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}";
+            _errorText =
+                "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}";
           });
           return;
         }
@@ -237,8 +254,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
         // Ignore macOS metadata files starting with ._
         if (nextItem.name.startsWith("._")) {
-           _unsupportedErrors[nextItem.path] = "MacOS metadata file";
-           continue;
+          _unsupportedErrors[nextItem.path] = "MacOS metadata file";
+          continue;
         }
 
         debugPrint("Projector: trying to play ${nextItem.path}");
@@ -264,7 +281,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _errorText = "${Intl.projectorPlayer_noMedia.tr}\n$e\n\n${_getDebugDump()}";
+          _errorText =
+              "${Intl.projectorPlayer_noMedia.tr}\n$e\n\n${_getDebugDump()}";
         });
       }
     } finally {
@@ -283,10 +301,10 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
     _imageFailedScheduled = false;
     _cancelCountdown();
-    
+
     debugPrint("Projector: stopping audio player");
     await _audioPlayer.stop();
-    
+
     debugPrint("Projector: stopping video player");
     try {
       // Use timeout to prevent hanging if plugin is unresponsive
@@ -299,7 +317,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       debugPrint("Projector: _playItem context unmounted");
       return "Context unmounted";
     }
-    
+
     debugPrint("Projector: setting state loading=true");
     setState(() {
       _currentItem = item;
@@ -315,10 +333,10 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
           // Delay slightly to ensure loading spinner is seen if needed, but mainly to break sync flow
           await Future.delayed(const Duration(milliseconds: 50));
           if (mounted) {
-             debugPrint("Projector: setting state loading=false");
-             setState(() {
-               _loading = false;
-             });
+            debugPrint("Projector: setting state loading=false");
+            setState(() {
+              _loading = false;
+            });
           }
         }
         _startCountdown(_config.imageStaySeconds);
@@ -380,7 +398,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
 
   void _skipCurrentAsUnsupported() {
     if (_currentItem != null) {
-      _unsupportedErrors[_currentItem!.path] = "Skipped by user or player error";
+      _unsupportedErrors[_currentItem!.path] =
+          "Skipped by user or player error";
     }
     SmartDialog.showToast(Intl.projectorPlayer_skipUnsupported.tr);
     _nextMedia();
@@ -453,36 +472,117 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
     }
   }
 
+  bool _isActivateKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.space;
+  }
+
+  bool _isDirectionalKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight;
+  }
+
+  void _setOverlayVisible(bool visible, {bool requestActionFocus = false}) {
+    if (!mounted) {
+      return;
+    }
+    if (_showOverlay == visible) {
+      if (visible && requestActionFocus) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          _closeButtonFocusNode.requestFocus();
+        });
+      }
+      return;
+    }
+    setState(() {
+      _showOverlay = visible;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (visible && requestActionFocus) {
+        _closeButtonFocusNode.requestFocus();
+      } else if (!visible) {
+        _pageFocusNode.requestFocus();
+      }
+    });
+  }
+
+  KeyEventResult _handlePlayerKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+
+    if (!_showOverlay && (_isActivateKey(key) || _isDirectionalKey(key))) {
+      _setOverlayVisible(true, requestActionFocus: true);
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  Future<bool> _onWillPop() async {
+    if (_showOverlay) {
+      _setOverlayVisible(false);
+      return false;
+    }
+    return true;
+  }
+
+  void _copyErrorText() {
+    if (_errorText == null || _errorText!.isEmpty) {
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: _errorText!));
+    SmartDialog.showToast(Intl.tips_link_copied.tr);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _showOverlay = !_showOverlay;
-        });
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            Positioned.fill(child: _buildMediaBody(context)),
-            if (_showOverlay) _buildTopOverlay(),
-            if (_showOverlay) _buildBottomOverlay(),
-            if (_loading)
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 12),
-                    Text(
-                      Intl.projectorPlayer_loading.tr,
-                      style: const TextStyle(color: Colors.white),
+    return Focus(
+      focusNode: _pageFocusNode,
+      autofocus: true,
+      onKeyEvent: _handlePlayerKeyEvent,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          _setOverlayVisible(!_showOverlay, requestActionFocus: !_showOverlay);
+        },
+        child: WillPopScope(
+          onWillPop: _onWillPop,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              children: [
+                Positioned.fill(child: _buildMediaBody(context)),
+                if (_showOverlay) _buildTopOverlay(),
+                if (_showOverlay) _buildBottomOverlay(),
+                if (_loading)
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(
+                          Intl.projectorPlayer_loading.tr,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              )
-          ],
+                  )
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -493,16 +593,20 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
       return Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: GestureDetector(
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: _errorText!));
-              SmartDialog.showToast(Intl.tips_link_copied.tr);
-            },
-            child: Text(
-              _errorText!,
-              style: const TextStyle(color: Colors.white),
-              textAlign: TextAlign.center,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _errorText!,
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _copyErrorText,
+                child: Text(Intl.fileList_menu_copyLink.tr),
+              ),
+            ],
           ),
         ),
       );
@@ -576,6 +680,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
         child: Row(
           children: [
             IconButton(
+              focusNode: _closeButtonFocusNode,
               onPressed: () => Get.back(),
               icon: const Icon(Icons.close, color: Colors.white),
             ),
@@ -588,6 +693,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen> {
               ),
             ),
             IconButton(
+              focusNode: _nextButtonFocusNode,
               onPressed: _nextMedia,
               icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
             ),
