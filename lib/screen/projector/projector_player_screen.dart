@@ -278,8 +278,6 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         .toInt();
   }
 
-  bool get _hideLoadingForPreparedItem => _config.preloadCount > 0;
-
   Future<void> _fillPreparedQueue() async {
     if (_preloadSourceExhausted || !mounted) {
       return;
@@ -425,12 +423,13 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         _sourcePathHint = prepared.pathHint;
 
         debugPrint("Projector: trying to play ${prepared.item.path}");
+        final shouldSkipLoading =
+            prepared.item.mediaType == _ProjectorMediaType.image &&
+                prepared.imagePrecached;
         final error = await _playItem(
           prepared.item,
           resolvedUrl: prepared.url,
-          skipLoadingIndicator: _hideLoadingForPreparedItem ||
-              (prepared.item.mediaType == _ProjectorMediaType.image &&
-                  prepared.imagePrecached),
+          skipLoadingIndicator: shouldSkipLoading,
         );
         if (error == null) {
           debugPrint("Projector: play success ${prepared.item.path}");
@@ -854,6 +853,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
       child: Image.network(
         url,
         fit: BoxFit.contain,
+        gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) {
           if (!_imageFailedScheduled) {
             _imageFailedScheduled = true;
