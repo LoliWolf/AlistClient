@@ -233,10 +233,23 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         !_awaitingAndroidNativeVideoReturn) {
       return;
     }
-    _awaitingAndroidNativeVideoReturn = false;
-    if (_currentItem?.mediaType == _ProjectorMediaType.video) {
-      _nextMedia();
-    }
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted || !_awaitingAndroidNativeVideoReturn) {
+        return;
+      }
+      final completed =
+          SpUtil.getBool(AlistConstant.projectorNativePlayerCompleted) ?? false;
+      SpUtil.remove(AlistConstant.projectorNativePlayerCompleted);
+      _awaitingAndroidNativeVideoReturn = false;
+      if (_currentItem?.mediaType != _ProjectorMediaType.video) {
+        return;
+      }
+      if (completed) {
+        _nextMedia();
+      } else {
+        Get.back();
+      }
+    });
   }
 
   String _getDebugDump() {
@@ -415,6 +428,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         headers[HttpHeaders.userAgentHeader] = "pan.baidu.com";
       }
       final playerType = SpUtil.getString(AlistConstant.playerType);
+      await SpUtil.remove(AlistConstant.projectorNativePlayerCompleted);
       _awaitingAndroidNativeVideoReturn = true;
       await AlistPlugin.playVideoWithInternalPlayer(
         [

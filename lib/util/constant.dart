@@ -39,6 +39,8 @@ class AlistConstant {
   static const String projectorAudioStaySeconds = 'projectorAudioStaySeconds';
   static const String projectorVideoStayInfinite = 'projectorVideoStayInfinite';
   static const String projectorAudioStayInfinite = 'projectorAudioStayInfinite';
+  static const String projectorNativePlayerCompleted =
+      'projectorNativePlayerCompleted';
 
   static const String locale = 'locale';
 }

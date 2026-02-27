@@ -1,5 +1,7 @@
 package com.github.alist.activity
 
+import android.app.Activity
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Handler
@@ -156,7 +158,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
                         FlutterMethods.deleteVideoRecord(videos[index].remotePath)
                         playNext()
                     } else if (finishOnComplete) {
-                        finish()
+                        finishWithProjectorResult(completed = true)
                     }
                 }
 
@@ -318,7 +320,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
         if (GSYVideoManager.backFromWindowFull(this)) {
             return
         }
-        super.onBackPressed()
+        finishWithProjectorResult(completed = false)
     }
 
 
@@ -329,6 +331,14 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
 
         this.totalTime = totalTime
         this.currentTime = currentTime
+    }
+
+    private fun finishWithProjectorResult(completed: Boolean) {
+        setResult(
+            Activity.RESULT_OK,
+            Intent().putExtra("projectorCompleted", completed)
+        )
+        finish()
     }
 
     inner class PlayerWrapper(val videoPlayer: AlistClientVideoPlayer) {
@@ -352,6 +362,9 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
             findViews()
             videoPlayer.btnPrevious.alpha = if (index > 0) 1f else 0.5f
             videoPlayer.btnNext.alpha = if (index >= videos.lastIndex) 0.5f else 1f
+            btnBack.setOnClickListener {
+                finishWithProjectorResult(completed = false)
+            }
 
             btnPrevious.setOnClickListener {
                 saveCurrentTime()

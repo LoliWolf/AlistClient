@@ -33,6 +33,7 @@ import java.io.File
 class AlistPlugin(private val activity: Activity, private val scope: CoroutineScope) :
     FlutterPlugin, MethodChannel.MethodCallHandler {
     private val requestCodeLaunchExternalPlayer = 1
+    private val requestCodeLaunchInternalPlayer = 2
 
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
@@ -105,7 +106,7 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
                 intent.putExtra("headers", headers)
                 intent.putExtra("playerType", playerType)
                 intent.putExtra("finishOnComplete", finishOnComplete)
-                activity.startActivity(intent)
+                activity.startActivityForResult(intent, requestCodeLaunchInternalPlayer)
                 result.success(true)
             }
 
@@ -286,6 +287,11 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == requestCodeLaunchExternalPlayer) {
             FlutterMethods.onPayerDestroyed()
+            return
+        }
+        if (requestCode == requestCodeLaunchInternalPlayer) {
+            val completed = data?.getBooleanExtra("projectorCompleted", false) ?: false
+            FlutterMethods.onPayerDestroyed(completed)
         }
     }
 }
