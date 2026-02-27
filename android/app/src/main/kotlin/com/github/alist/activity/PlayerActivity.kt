@@ -239,10 +239,15 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     private fun startPlay(index: Int, video: VideoItem) {
         val playUrl = if (video.localPath.isNullOrEmpty()) video.url else video.localPath
         gsyVideoPlayer.currentPlayer.setUp(playUrl, false, video.name.substringBeforeLast("."))
-        FlutterMethods.findVideoRecordByPath(video.remotePath) { record ->
-            Debuger.printfLog("seekOnStart=${record.videoCurrentPosition}")
-            gsyVideoPlayer.currentPlayer.seekOnStart = record.videoCurrentPosition ?: 0L
+        if (finishOnComplete) {
+            gsyVideoPlayer.currentPlayer.seekOnStart = 0L
             gsyVideoPlayer.currentPlayer.startPlayLogic()
+        } else {
+            FlutterMethods.findVideoRecordByPath(video.remotePath) { record ->
+                Debuger.printfLog("seekOnStart=${record.videoCurrentPosition}")
+                gsyVideoPlayer.currentPlayer.seekOnStart = record.videoCurrentPosition ?: 0L
+                gsyVideoPlayer.currentPlayer.startPlayLogic()
+            }
         }
         val currentPlayer = playerWrapper.videoPlayer.currentPlayer as NormalGSYVideoPlayer
         playerWrapper.tvTitle.text = video.name.substringBeforeLast(".")
@@ -274,6 +279,9 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     }
 
     private fun saveCurrentTime() {
+        if (finishOnComplete) {
+            return
+        }
         if (videos.isNotEmpty() && totalTime > 0) {
             val video = videos[index]
             Debuger.printfLog("save ${video.remotePath} $currentTime $totalTime")
