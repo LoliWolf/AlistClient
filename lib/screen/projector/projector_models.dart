@@ -8,10 +8,13 @@ enum ProjectorTraversalMode {
 }
 
 class ProjectorConfig {
+  static const int maxPreloadCount = 20;
+
   final ProjectorTraversalMode traversalMode;
   final int imageStaySeconds;
   final int videoStaySeconds;
   final int audioStaySeconds;
+  final int preloadCount;
   final bool videoStayInfinite;
   final bool audioStayInfinite;
 
@@ -20,6 +23,7 @@ class ProjectorConfig {
     required this.imageStaySeconds,
     required this.videoStaySeconds,
     required this.audioStaySeconds,
+    required this.preloadCount,
     required this.videoStayInfinite,
     required this.audioStayInfinite,
   });
@@ -29,6 +33,7 @@ class ProjectorConfig {
         imageStaySeconds = 8,
         videoStaySeconds = 30,
         audioStaySeconds = 30,
+        preloadCount = 2,
         videoStayInfinite = true,
         audioStayInfinite = true;
 
@@ -37,6 +42,7 @@ class ProjectorConfig {
     int? imageStaySeconds,
     int? videoStaySeconds,
     int? audioStaySeconds,
+    int? preloadCount,
     bool? videoStayInfinite,
     bool? audioStayInfinite,
   }) {
@@ -45,6 +51,7 @@ class ProjectorConfig {
       imageStaySeconds: imageStaySeconds ?? this.imageStaySeconds,
       videoStaySeconds: videoStaySeconds ?? this.videoStaySeconds,
       audioStaySeconds: audioStaySeconds ?? this.audioStaySeconds,
+      preloadCount: preloadCount ?? this.preloadCount,
       videoStayInfinite: videoStayInfinite ?? this.videoStayInfinite,
       audioStayInfinite: audioStayInfinite ?? this.audioStayInfinite,
     );
@@ -56,6 +63,7 @@ class ProjectorConfig {
       "imageStaySeconds": imageStaySeconds,
       "videoStaySeconds": videoStaySeconds,
       "audioStaySeconds": audioStaySeconds,
+      "preloadCount": preloadCount,
       "videoStayInfinite": videoStayInfinite,
       "audioStayInfinite": audioStayInfinite,
     };
@@ -71,6 +79,8 @@ class ProjectorConfig {
           args["videoStaySeconds"], defaults.videoStaySeconds),
       audioStaySeconds: _parsePositiveInt(
           args["audioStaySeconds"], defaults.audioStaySeconds),
+      preloadCount: _normalizePreloadCount(
+          _parseNonNegativeInt(args["preloadCount"], defaults.preloadCount)),
       videoStayInfinite:
           _parseBool(args["videoStayInfinite"], defaults.videoStayInfinite),
       audioStayInfinite:
@@ -101,6 +111,23 @@ class ProjectorConfig {
     return fallback;
   }
 
+  static int _parseNonNegativeInt(dynamic value, int fallback) {
+    if (value is int && value >= 0) {
+      return value;
+    }
+    if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed != null && parsed >= 0) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  static int _normalizePreloadCount(int value) {
+    return value.clamp(0, maxPreloadCount).toInt();
+  }
+
   static bool _parseBool(dynamic value, bool fallback) {
     if (value is bool) {
       return value;
@@ -127,6 +154,9 @@ class ProjectorConfigStore {
             AlistConstant.projectorAudioStaySeconds,
             defValue: defaults.audioStaySeconds) ??
         defaults.audioStaySeconds;
+    final preloadCount = SpUtil.getInt(AlistConstant.projectorPreloadCount,
+            defValue: defaults.preloadCount) ??
+        defaults.preloadCount;
     final videoStayInfinite = SpUtil.getBool(
             AlistConstant.projectorVideoStayInfinite,
             defValue: defaults.videoStayInfinite) ??
@@ -150,6 +180,7 @@ class ProjectorConfigStore {
       audioStaySeconds: audioStaySeconds > 0
           ? audioStaySeconds
           : const ProjectorConfig.defaults().audioStaySeconds,
+      preloadCount: ProjectorConfig._normalizePreloadCount(preloadCount),
       videoStayInfinite: videoStayInfinite,
       audioStayInfinite: audioStayInfinite,
     );
@@ -164,6 +195,8 @@ class ProjectorConfigStore {
         AlistConstant.projectorVideoStaySeconds, config.videoStaySeconds);
     await SpUtil.putInt(
         AlistConstant.projectorAudioStaySeconds, config.audioStaySeconds);
+    await SpUtil.putInt(AlistConstant.projectorPreloadCount,
+        ProjectorConfig._normalizePreloadCount(config.preloadCount));
     await SpUtil.putBool(
         AlistConstant.projectorVideoStayInfinite, config.videoStayInfinite);
     await SpUtil.putBool(

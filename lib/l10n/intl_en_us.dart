@@ -243,12 +243,15 @@ const translationsEnUS = {
   "projectorConfig_imageStaySeconds": "Image stay (seconds)",
   "projectorConfig_videoStaySeconds": "Video stay (seconds)",
   "projectorConfig_audioStaySeconds": "Audio stay (seconds)",
+  "projectorConfig_preloadCount": "Preload next files",
   "projectorConfig_videoStayInfinite":
       "Video infinite stay (next on completion)",
   "projectorConfig_audioStayInfinite":
       "Audio infinite stay (next on completion)",
   "projectorConfig_start": "Start projector",
   "projectorConfig_invalidSeconds": "Please enter a number greater than 0",
+  "projectorConfig_invalidPreloadCount":
+      "Please enter a number greater than or equal to 0",
   "projectorPlayer_loading": "Loading media...",
   "projectorPlayer_noMedia": "No playable media in this folder tree",
   "projectorPlayer_countdown": "Next in",

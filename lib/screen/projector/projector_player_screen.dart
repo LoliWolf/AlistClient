@@ -50,14 +50,19 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
   late final _ProjectorTraversalSource _source;
 
   final Map<String, String> _unsupportedErrors = {};
+  final Queue<_PreparedProjectorMedia> _preparedQueue =
+      Queue<_PreparedProjectorMedia>();
   StreamSubscription<PlayerState>? _audioStateSubscription;
   Timer? _countdownTimer;
+  Completer<void>? _preloadFillCompleter;
 
   _ProjectorMediaItem? _currentItem;
   String? _currentUrl;
   String _sourcePathHint = "/";
   bool _loading = true;
   bool _advancing = false;
+  bool _preloadFilling = false;
+  bool _preloadSourceExhausted = false;
   bool _showOverlay = false;
   int _countdownSeconds = 0;
   bool _imageFailedScheduled = false;
@@ -100,6 +105,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
       debugPrint("Projector: _enableImmersiveMode failed: $e");
     }
 
+    unawaited(_fillPreparedQueue());
     _nextMedia();
   }
 
@@ -260,8 +266,142 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
       buffer.writeln("  - ${entry.key}");
       buffer.writeln("    Error: ${entry.value}");
     }
+    buffer.writeln(
+        "Prepared Queue: ${_preparedQueue.length}/$_targetPreparedQueueSize");
     buffer.writeln(_repository.getDebugInfo());
     return buffer.toString();
+  }
+
+  int get _targetPreparedQueueSize {
+    return (_config.preloadCount + 1)
+        .clamp(1, ProjectorConfig.maxPreloadCount + 1)
+        .toInt();
+  }
+
+  bool get _hideLoadingForPreparedItem => _config.preloadCount > 0;
+
+  Future<void> _fillPreparedQueue() async {
+    if (_preloadSourceExhausted || !mounted) {
+      return;
+    }
+    if (_preloadFilling) {
+      final running = _preloadFillCompleter;
+      if (running != null) {
+        await running.future;
+      }
+      return;
+    }
+    _preloadFilling = true;
+    final startedWithEmptyQueue = _preparedQueue.isEmpty;
+    final targetSize = startedWithEmptyQueue ? 1 : _targetPreparedQueueSize;
+    final completer = Completer<void>();
+    _preloadFillCompleter = completer;
+    try {
+      while (mounted &&
+          !_preloadSourceExhausted &&
+          _preparedQueue.length < targetSize) {
+        final prepared = await _prepareNextPlayableItem();
+        if (prepared == null) {
+          break;
+        }
+        _preparedQueue.add(prepared);
+      }
+    } catch (e, s) {
+      debugPrint("Projector preload fill error: $e\n$s");
+    } finally {
+      _preloadFilling = false;
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+      if (identical(_preloadFillCompleter, completer)) {
+        _preloadFillCompleter = null;
+      }
+      if (startedWithEmptyQueue &&
+          mounted &&
+          !_preloadSourceExhausted &&
+          _preparedQueue.isNotEmpty) {
+        unawaited(_fillPreparedQueue());
+      }
+    }
+  }
+
+  Future<_PreparedProjectorMedia?> _prepareNextPlayableItem() async {
+    const int maxAttempts = 400;
+    for (int i = 0; i < maxAttempts; i++) {
+      final nextItem = await _source.next();
+      if (nextItem == null) {
+        _preloadSourceExhausted = true;
+        return null;
+      }
+      final pathHint = _source.currentPathHint ?? _rootPath;
+
+      if (_unsupportedErrors.containsKey(nextItem.path)) {
+        continue;
+      }
+
+      if (nextItem.name.startsWith("._")) {
+        _unsupportedErrors[nextItem.path] = "MacOS metadata file";
+        continue;
+      }
+
+      final url = await FileUtils.makeFileLink(nextItem.path, nextItem.sign,
+          toastShowTips: false);
+      if (url == null || url.isEmpty) {
+        _unsupportedErrors[nextItem.path] =
+            "URL generation failed (empty or null)";
+        continue;
+      }
+
+      final imagePrecached = await _precacheImageIfNeeded(nextItem, url);
+      return _PreparedProjectorMedia(
+        item: nextItem,
+        pathHint: pathHint,
+        url: url,
+        imagePrecached: imagePrecached,
+      );
+    }
+    _preloadSourceExhausted = true;
+    return null;
+  }
+
+  Future<bool> _precacheImageIfNeeded(
+      _ProjectorMediaItem item, String url) async {
+    if (!mounted || item.mediaType != _ProjectorMediaType.image) {
+      return false;
+    }
+    try {
+      await precacheImage(NetworkImage(url), context);
+      return true;
+    } catch (e) {
+      debugPrint("Projector image preload failed: ${item.path}, error: $e");
+      return false;
+    }
+  }
+
+  Future<_PreparedProjectorMedia?> _takeNextPreparedItem() async {
+    if (_preparedQueue.isEmpty) {
+      await _fillPreparedQueue();
+    }
+    if (_preparedQueue.isEmpty) {
+      return null;
+    }
+    final prepared = _preparedQueue.removeFirst();
+    unawaited(_fillPreparedQueue());
+    return prepared;
+  }
+
+  void _showNoPlayableMediaError([Object? error]) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loading = false;
+      _currentItem = null;
+      _currentUrl = null;
+      _errorText = error == null
+          ? "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}"
+          : "${Intl.projectorPlayer_noMedia.tr}\n$error\n\n${_getDebugDump()}";
+    });
   }
 
   Future<void> _nextMedia() async {
@@ -274,72 +414,51 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
     _cancelCountdown();
 
     try {
-      debugPrint("Projector: starting traversal loop");
+      debugPrint("Projector: consume prepared queue");
       for (int i = 0; i < 400; i++) {
-        final nextItem = await _source.next();
-        if (nextItem == null) {
-          debugPrint("Projector: source exhausted");
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _loading = false;
-            _currentItem = null;
-            _currentUrl = null;
-            _errorText =
-                "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}";
-          });
+        final prepared = await _takeNextPreparedItem();
+        if (prepared == null) {
+          debugPrint("Projector: prepared queue exhausted");
+          _showNoPlayableMediaError();
           return;
         }
-        _sourcePathHint = _source.currentPathHint ?? _rootPath;
+        _sourcePathHint = prepared.pathHint;
 
-        if (_unsupportedErrors.containsKey(nextItem.path)) {
-          debugPrint("Projector: skipping known unsupported ${nextItem.path}");
-          continue;
-        }
-
-        // Ignore macOS metadata files starting with ._
-        if (nextItem.name.startsWith("._")) {
-          _unsupportedErrors[nextItem.path] = "MacOS metadata file";
-          continue;
-        }
-
-        debugPrint("Projector: trying to play ${nextItem.path}");
-        final error = await _playItem(nextItem);
+        debugPrint("Projector: trying to play ${prepared.item.path}");
+        final error = await _playItem(
+          prepared.item,
+          resolvedUrl: prepared.url,
+          skipLoadingIndicator: _hideLoadingForPreparedItem ||
+              (prepared.item.mediaType == _ProjectorMediaType.image &&
+                  prepared.imagePrecached),
+        );
         if (error == null) {
-          debugPrint("Projector: play success ${nextItem.path}");
+          debugPrint("Projector: play success ${prepared.item.path}");
           return;
         }
 
-        debugPrint("Projector: play failed ${nextItem.path}: $error");
-        _unsupportedErrors[nextItem.path] = error;
+        debugPrint("Projector: play failed ${prepared.item.path}: $error");
+        _unsupportedErrors[prepared.item.path] = error;
       }
 
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loading = false;
-        _errorText = "${Intl.projectorPlayer_noMedia.tr}\n\n${_getDebugDump()}";
-      });
+      _showNoPlayableMediaError();
     } catch (e, s) {
       debugPrint("Projector _nextMedia error: $e\n$s");
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _errorText =
-              "${Intl.projectorPlayer_noMedia.tr}\n$e\n\n${_getDebugDump()}";
-        });
-      }
+      _showNoPlayableMediaError(e);
     } finally {
       _advancing = false;
     }
   }
 
-  Future<String?> _playItem(_ProjectorMediaItem item) async {
+  Future<String?> _playItem(
+    _ProjectorMediaItem item, {
+    String? resolvedUrl,
+    bool skipLoadingIndicator = false,
+  }) async {
     debugPrint("Projector: _playItem start: ${item.path}");
-    final url = await FileUtils.makeFileLink(item.path, item.sign,
-        toastShowTips: false);
+    final url = resolvedUrl ??
+        await FileUtils.makeFileLink(item.path, item.sign,
+            toastShowTips: false);
     if (url == null || url.isEmpty) {
       debugPrint("Projector skip: url is empty for ${item.path}");
       return "URL generation failed (empty or null)";
@@ -366,21 +485,21 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
       return "Context unmounted";
     }
 
-    debugPrint("Projector: setting state loading=true");
+    debugPrint("Projector: setting state loading=${!skipLoadingIndicator}");
     setState(() {
       _currentItem = item;
       _currentUrl = url;
-      _loading = true;
+      _loading = !skipLoadingIndicator;
       _errorText = null;
     });
 
     switch (item.mediaType) {
       case _ProjectorMediaType.image:
         debugPrint("Projector: type is image");
-        if (mounted) {
+        if (mounted && !skipLoadingIndicator) {
           // Delay slightly to ensure loading spinner is seen if needed, but mainly to break sync flow
           await Future.delayed(const Duration(milliseconds: 50));
-          if (mounted) {
+          if (mounted && _loading) {
             debugPrint("Projector: setting state loading=false");
             setState(() {
               _loading = false;
@@ -879,6 +998,20 @@ class _ProjectorMediaItem {
     required this.sign,
     required this.provider,
     required this.mediaType,
+  });
+}
+
+class _PreparedProjectorMedia {
+  final _ProjectorMediaItem item;
+  final String pathHint;
+  final String url;
+  final bool imagePrecached;
+
+  _PreparedProjectorMedia({
+    required this.item,
+    required this.pathHint,
+    required this.url,
+    required this.imagePrecached,
   });
 }
 

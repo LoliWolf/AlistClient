@@ -19,6 +19,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
   late final TextEditingController _imageStayController;
   late final TextEditingController _videoStayController;
   late final TextEditingController _audioStayController;
+  late final TextEditingController _preloadController;
   late final FocusNode _modeFocusNode;
 
   late final String _path;
@@ -46,6 +47,8 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
         TextEditingController(text: config.videoStaySeconds.toString());
     _audioStayController =
         TextEditingController(text: config.audioStaySeconds.toString());
+    _preloadController =
+        TextEditingController(text: config.preloadCount.toString());
     _modeFocusNode = FocusNode();
     if (defaultTargetPlatform == TargetPlatform.android) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,6 +65,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
     _imageStayController.dispose();
     _videoStayController.dispose();
     _audioStayController.dispose();
+    _preloadController.dispose();
     _modeFocusNode.dispose();
     super.dispose();
   }
@@ -118,6 +122,12 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
               label: Intl.projectorConfig_audioStaySeconds.tr,
               controller: _audioStayController,
               enabled: !_audioStayInfinite,
+            ),
+            const SizedBox(height: 12),
+            _buildSecondsInput(
+              label: Intl.projectorConfig_preloadCount.tr,
+              controller: _preloadController,
+              enabled: true,
             ),
             const SizedBox(height: 20),
             FilledButton(
@@ -192,6 +202,14 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
     return result;
   }
 
+  int? _parsePreloadCount(String value) {
+    final result = int.tryParse(value.trim());
+    if (result == null || result < 0) {
+      return null;
+    }
+    return result.clamp(0, ProjectorConfig.maxPreloadCount).toInt();
+  }
+
   Future<void> _startProjector() async {
     final imageStaySeconds = _parseSeconds(_imageStayController.text);
     if (imageStaySeconds == null) {
@@ -211,11 +229,18 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
       return;
     }
 
+    final preloadCount = _parsePreloadCount(_preloadController.text);
+    if (preloadCount == null) {
+      SmartDialog.showToast(Intl.projectorConfig_invalidPreloadCount.tr);
+      return;
+    }
+
     final config = ProjectorConfig(
       traversalMode: _traversalMode,
       imageStaySeconds: imageStaySeconds,
       videoStaySeconds: videoStaySeconds,
       audioStaySeconds: audioStaySeconds,
+      preloadCount: preloadCount,
       videoStayInfinite: _videoStayInfinite,
       audioStayInfinite: _audioStayInfinite,
     );

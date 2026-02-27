@@ -232,20 +232,16 @@ const translationsZhCN = {
   "projectorConfig_imageStaySeconds": "图片停留秒数",
   "projectorConfig_videoStaySeconds": "视频停留秒数",
   "projectorConfig_audioStaySeconds": "音频停留秒数",
-  "projectorConfig_videoStayInfinite":
-      "视频无限停留 (播完自动切换)",
-  "projectorConfig_audioStayInfinite":
-      "音频无限停留 (播完自动切换)",
+  "projectorConfig_preloadCount": "预加载后面 x 个文件",
+  "projectorConfig_videoStayInfinite": "视频无限停留 (播完自动切换)",
+  "projectorConfig_audioStayInfinite": "音频无限停留 (播完自动切换)",
   "projectorConfig_start": "开始放映",
-  "projectorConfig_invalidSeconds":
-      "请输入大于 0 的秒数",
+  "projectorConfig_invalidSeconds": "请输入大于 0 的秒数",
+  "projectorConfig_invalidPreloadCount": "请输入大于等于 0 的整数",
   "projectorPlayer_loading": "加载媒体中...",
-  "projectorPlayer_noMedia":
-      "当前目录树没有可播放媒体",
+  "projectorPlayer_noMedia": "当前目录树没有可播放媒体",
   "projectorPlayer_countdown": "切换倒计时",
-  "projectorPlayer_autoNextOnComplete":
-      "播放完成后自动切换",
-  "projectorPlayer_skipUnsupported":
-      "当前媒体不支持，已跳过",
+  "projectorPlayer_autoNextOnComplete": "播放完成后自动切换",
+  "projectorPlayer_skipUnsupported": "当前媒体不支持，已跳过",
   "projectorPlayer_scanning": "正在扫描媒体树...",
 };
