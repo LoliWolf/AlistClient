@@ -229,6 +229,7 @@ const translationsZhCN = {
   "projectorConfig_mode_orderedDfs": "有序循环",
   "projectorConfig_mode_randomWalk": "随机下探遍历",
   "projectorConfig_mode_randomAll": "整树媒体随机",
+  "projectorConfig_imageOnly": "仅图片",
   "projectorConfig_imageStaySeconds": "图片停留秒数",
   "projectorConfig_videoStaySeconds": "视频停留秒数",
   "projectorConfig_audioStaySeconds": "音频停留秒数",

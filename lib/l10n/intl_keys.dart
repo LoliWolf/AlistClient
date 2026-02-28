@@ -335,6 +335,7 @@ class Intl {
       "projectorConfig_mode_randomWalk";
   static const String projectorConfig_mode_randomAll =
       "projectorConfig_mode_randomAll";
+  static const String projectorConfig_imageOnly = "projectorConfig_imageOnly";
   static const String projectorConfig_imageStaySeconds =
       "projectorConfig_imageStaySeconds";
   static const String projectorConfig_videoStaySeconds =

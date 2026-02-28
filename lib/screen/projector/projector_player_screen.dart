@@ -76,7 +76,10 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
     WidgetsBinding.instance.addObserver(this);
     _videoPlayer = FlutterAliPlayerFactory.createAliPlayer();
     _initArgs();
-    _repository = _ProjectorRepository(backupPassword: _backupPassword);
+    _repository = _ProjectorRepository(
+      backupPassword: _backupPassword,
+      imageOnly: _config.imageOnly,
+    );
     _source = _createSource(_config.traversalMode);
     if (defaultTargetPlatform == TargetPlatform.android) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1026,9 +1029,13 @@ class _ProjectorDirectorySnapshot {
 }
 
 class _ProjectorRepository {
-  _ProjectorRepository({required this.backupPassword});
+  _ProjectorRepository({
+    required this.backupPassword,
+    required this.imageOnly,
+  });
 
   final String backupPassword;
+  final bool imageOnly;
   final CancelToken _cancelToken = CancelToken();
   final Map<String, _ProjectorDirectorySnapshot?> _cache = {};
   final Map<String, Future<_ProjectorDirectorySnapshot?>> _inflight = {};
@@ -1121,9 +1128,9 @@ class _ProjectorRepository {
       case FileType.image:
         return _ProjectorMediaType.image;
       case FileType.video:
-        return _ProjectorMediaType.video;
+        return imageOnly ? null : _ProjectorMediaType.video;
       case FileType.audio:
-        return _ProjectorMediaType.audio;
+        return imageOnly ? null : _ProjectorMediaType.audio;
       default:
         return null;
     }

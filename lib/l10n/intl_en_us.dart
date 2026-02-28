@@ -240,6 +240,7 @@ const translationsEnUS = {
   "projectorConfig_mode_orderedDfs": "Ordered loop (DFS)",
   "projectorConfig_mode_randomWalk": "Random walk in subtree",
   "projectorConfig_mode_randomAll": "Random in full media tree",
+  "projectorConfig_imageOnly": "Images only",
   "projectorConfig_imageStaySeconds": "Image stay (seconds)",
   "projectorConfig_videoStaySeconds": "Video stay (seconds)",
   "projectorConfig_audioStaySeconds": "Audio stay (seconds)",

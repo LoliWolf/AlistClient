@@ -11,6 +11,7 @@ class ProjectorConfig {
   static const int maxPreloadCount = 20;
 
   final ProjectorTraversalMode traversalMode;
+  final bool imageOnly;
   final int imageStaySeconds;
   final int videoStaySeconds;
   final int audioStaySeconds;
@@ -20,6 +21,7 @@ class ProjectorConfig {
 
   const ProjectorConfig({
     required this.traversalMode,
+    required this.imageOnly,
     required this.imageStaySeconds,
     required this.videoStaySeconds,
     required this.audioStaySeconds,
@@ -30,6 +32,7 @@ class ProjectorConfig {
 
   const ProjectorConfig.defaults()
       : traversalMode = ProjectorTraversalMode.orderedDfs,
+        imageOnly = false,
         imageStaySeconds = 8,
         videoStaySeconds = 30,
         audioStaySeconds = 30,
@@ -39,6 +42,7 @@ class ProjectorConfig {
 
   ProjectorConfig copyWith({
     ProjectorTraversalMode? traversalMode,
+    bool? imageOnly,
     int? imageStaySeconds,
     int? videoStaySeconds,
     int? audioStaySeconds,
@@ -48,6 +52,7 @@ class ProjectorConfig {
   }) {
     return ProjectorConfig(
       traversalMode: traversalMode ?? this.traversalMode,
+      imageOnly: imageOnly ?? this.imageOnly,
       imageStaySeconds: imageStaySeconds ?? this.imageStaySeconds,
       videoStaySeconds: videoStaySeconds ?? this.videoStaySeconds,
       audioStaySeconds: audioStaySeconds ?? this.audioStaySeconds,
@@ -60,6 +65,7 @@ class ProjectorConfig {
   Map<String, dynamic> toArgs() {
     return {
       "traversalMode": traversalMode.index,
+      "imageOnly": imageOnly,
       "imageStaySeconds": imageStaySeconds,
       "videoStaySeconds": videoStaySeconds,
       "audioStaySeconds": audioStaySeconds,
@@ -73,6 +79,7 @@ class ProjectorConfig {
     const defaults = ProjectorConfig.defaults();
     return ProjectorConfig(
       traversalMode: _parseMode(args["traversalMode"], defaults.traversalMode),
+      imageOnly: _parseBool(args["imageOnly"], defaults.imageOnly),
       imageStaySeconds: _parsePositiveInt(
           args["imageStaySeconds"], defaults.imageStaySeconds),
       videoStaySeconds: _parsePositiveInt(
@@ -157,6 +164,9 @@ class ProjectorConfigStore {
     final preloadCount = SpUtil.getInt(AlistConstant.projectorPreloadCount,
             defValue: defaults.preloadCount) ??
         defaults.preloadCount;
+    final imageOnly = SpUtil.getBool(AlistConstant.projectorImageOnly,
+            defValue: defaults.imageOnly) ??
+        defaults.imageOnly;
     final videoStayInfinite = SpUtil.getBool(
             AlistConstant.projectorVideoStayInfinite,
             defValue: defaults.videoStayInfinite) ??
@@ -171,6 +181,7 @@ class ProjectorConfigStore {
 
     return ProjectorConfig(
       traversalMode: ProjectorTraversalMode.values[normalizedModeIndex],
+      imageOnly: imageOnly,
       imageStaySeconds: imageStaySeconds > 0
           ? imageStaySeconds
           : const ProjectorConfig.defaults().imageStaySeconds,
@@ -197,6 +208,7 @@ class ProjectorConfigStore {
         AlistConstant.projectorAudioStaySeconds, config.audioStaySeconds);
     await SpUtil.putInt(AlistConstant.projectorPreloadCount,
         ProjectorConfig._normalizePreloadCount(config.preloadCount));
+    await SpUtil.putBool(AlistConstant.projectorImageOnly, config.imageOnly);
     await SpUtil.putBool(
         AlistConstant.projectorVideoStayInfinite, config.videoStayInfinite);
     await SpUtil.putBool(

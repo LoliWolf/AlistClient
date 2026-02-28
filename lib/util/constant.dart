@@ -40,6 +40,7 @@ class AlistConstant {
   static const String projectorPreloadCount = 'projectorPreloadCount';
   static const String projectorVideoStayInfinite = 'projectorVideoStayInfinite';
   static const String projectorAudioStayInfinite = 'projectorAudioStayInfinite';
+  static const String projectorImageOnly = 'projectorImageOnly';
   static const String projectorNativePlayerCompleted =
       'projectorNativePlayerCompleted';
 

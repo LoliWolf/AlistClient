@@ -25,6 +25,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
   late final String _path;
   late final String _backupPassword;
   late ProjectorTraversalMode _traversalMode;
+  late bool _imageOnly;
   late bool _videoStayInfinite;
   late bool _audioStayInfinite;
 
@@ -39,6 +40,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
 
     final config = ProjectorConfigStore.load();
     _traversalMode = config.traversalMode;
+    _imageOnly = config.imageOnly;
     _videoStayInfinite = config.videoStayInfinite;
     _audioStayInfinite = config.audioStayInfinite;
     _imageStayController =
@@ -85,6 +87,17 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
             ),
             const SizedBox(height: 12),
             _buildModeSelector(),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(Intl.projectorConfig_imageOnly.tr),
+              value: _imageOnly,
+              onChanged: (value) {
+                setState(() {
+                  _imageOnly = value;
+                });
+              },
+            ),
             const SizedBox(height: 12),
             _buildSecondsInput(
               label: Intl.projectorConfig_imageStaySeconds.tr,
@@ -237,6 +250,7 @@ class _ProjectorConfigScreenState extends State<ProjectorConfigScreen> {
 
     final config = ProjectorConfig(
       traversalMode: _traversalMode,
+      imageOnly: _imageOnly,
       imageStaySeconds: imageStaySeconds,
       videoStaySeconds: videoStaySeconds,
       audioStaySeconds: audioStaySeconds,
