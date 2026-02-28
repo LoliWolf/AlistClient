@@ -14,6 +14,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import com.github.alist.DownloadingNotificationService
 import com.github.alist.activity.PlayerActivity
 import com.github.alist.utils.FlutterMethods
@@ -68,13 +69,24 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
             }
 
             "onDownloadingStart" -> {
-                context.startService(Intent(context, DownloadingNotificationService::class.java))
-                result.success(null)
+                try {
+                    ContextCompat.startForegroundService(
+                        context,
+                        Intent(context, DownloadingNotificationService::class.java)
+                    )
+                    result.success(null)
+                } catch (e: Exception) {
+                    result.error("-1", "failed to start downloading service: ${e.message}", null)
+                }
             }
 
             "onDownloadingEnd" -> {
-                context.stopService(Intent(context, DownloadingNotificationService::class.java))
-                result.success(null)
+                try {
+                    context.stopService(Intent(context, DownloadingNotificationService::class.java))
+                    result.success(null)
+                } catch (e: Exception) {
+                    result.error("-1", "failed to stop downloading service: ${e.message}", null)
+                }
             }
 
             "saveFileToLocal" -> {
