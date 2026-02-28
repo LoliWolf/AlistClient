@@ -1342,15 +1342,37 @@ class _RandomWalkTraversalSource implements _ProjectorTraversalSource {
         continue;
       }
 
-      final chooseMedia = cursor.hasRemainingMedias &&
-          (!cursor.hasRemainingChildren || _random.nextBool());
-      if (chooseMedia) {
-        _currentPathHint = currentPath;
-        return cursor.takeMedia();
+      final canJumpToParent = _pathStack.length > 1;
+      if (canJumpToParent && _shouldJumpToParent(cursor.currentDirFileCount)) {
+        _pathStack.removeLast();
+        continue;
+      }
+
+      final canChooseMedia = cursor.hasRemainingMedias;
+      final canChooseChild = cursor.hasRemainingChildren;
+      if (canChooseMedia && canChooseChild) {
+        if (_random.nextBool()) {
+          final media = cursor.takeMedia();
+          if (media != null) {
+            _currentPathHint = currentPath;
+            return media;
+          }
+        }
+      } else if (canChooseMedia) {
+        final media = cursor.takeMedia();
+        if (media != null) {
+          _currentPathHint = currentPath;
+          return media;
+        }
       }
 
       final child = cursor.takeChild();
       if (child == null) {
+        if (canJumpToParent) {
+          _pathStack.removeLast();
+          continue;
+        }
+        _resetAllCursors();
         continue;
       }
       _pathStack.add(child);
@@ -1376,6 +1398,12 @@ class _RandomWalkTraversalSource implements _ProjectorTraversalSource {
       cursor.reset(_random);
     }
   }
+
+  bool _shouldJumpToParent(int currentDirFileCount) {
+    final normalizedCount = max(0, currentDirFileCount);
+    final jumpProbability = 1.0 / (normalizedCount + 1);
+    return _random.nextDouble() < jumpProbability;
+  }
 }
 
 class _RandomWalkCursor {
@@ -1392,6 +1420,8 @@ class _RandomWalkCursor {
   bool get hasRemainingChildren => _remainingChildren.isNotEmpty;
 
   bool get hasRemainingItems => hasRemainingMedias || hasRemainingChildren;
+
+  int get currentDirFileCount => snapshot.medias.length + snapshot.childFolders.length;
 
   void reset(Random random) {
     _remainingMedias
