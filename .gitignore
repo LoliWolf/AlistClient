@@ -49,6 +49,7 @@ app.*.map.json
 
 # Local/FVM
 .fvmrc
+build_release_signed.bat
 
 # Vendored plugin local artifacts
 third_party/flutter_document_picker/android/.gradle/

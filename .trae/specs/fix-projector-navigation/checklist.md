@@ -1,2 +1,0 @@
-- [x] Navigation to Projector Config uses root navigator (no `id` param)
-- [x] Navigation to Projector Player uses root navigator (no `id` param)
