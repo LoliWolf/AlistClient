@@ -62,6 +62,7 @@ class FileListMenuAnchorController {
   var isMenuOpen = false.obs;
   var sortBy = MenuId.fileName.obs;
   var sortByUp = true.obs;
+  final FocusNode firstMenuItemFocusNode = FocusNode();
 
   updateSortBy(MenuId? sortBy, bool? sortByUp) {
     if (sortBy != null) {
@@ -70,6 +71,10 @@ class FileListMenuAnchorController {
     if (sortByUp != null) {
       this.sortByUp.value = sortByUp;
     }
+  }
+
+  void dispose() {
+    firstMenuItemFocusNode.dispose();
   }
 }
 
@@ -96,6 +101,12 @@ class FileListMenuAnchor extends StatelessWidget {
       anchorTapClosesMenu: true,
       onOpen: () {
         controller.isMenuOpen.value = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (controller.isMenuOpen.value &&
+              controller.firstMenuItemFocusNode.canRequestFocus) {
+            controller.firstMenuItemFocusNode.requestFocus();
+          }
+        });
       },
       onClose: () {
         controller.isMenuOpen.value = false;
@@ -135,8 +146,14 @@ class FileListMenuAnchor extends StatelessWidget {
         width: menuWidth,
       ),
     ];
+    var shouldBindFirstFocusNode = true;
     if (canWrite) {
-      _addMenus(menus, menuGroupOperations, onMenuClickCallback);
+      shouldBindFirstFocusNode = _addMenus(
+        menuWidgets: menus,
+        menuGroup: menuGroupOperations,
+        onMenuClickCallback: onMenuClickCallback,
+        bindFirstFocusNode: shouldBindFirstFocusNode,
+      );
     } else {
       final readonlyGroup = MenuGroupEntity(
         menuGroupId: MenuGroupId.operations,
@@ -161,7 +178,12 @@ class FileListMenuAnchor extends StatelessWidget {
           ),
         ],
       );
-      _addMenus(menus, readonlyGroup, onMenuClickCallback);
+      shouldBindFirstFocusNode = _addMenus(
+        menuWidgets: menus,
+        menuGroup: readonlyGroup,
+        onMenuClickCallback: onMenuClickCallback,
+        bindFirstFocusNode: shouldBindFirstFocusNode,
+      );
     }
     menus.add(
       Container(
@@ -171,9 +193,10 @@ class FileListMenuAnchor extends StatelessWidget {
     );
 
     _addMenus(
-      menus,
-      _buildMenuGroupSort(sortBy, sortByUp),
-      onMenuClickCallback,
+      menuWidgets: menus,
+      menuGroup: _buildMenuGroupSort(sortBy, sortByUp),
+      onMenuClickCallback: onMenuClickCallback,
+      bindFirstFocusNode: shouldBindFirstFocusNode,
     );
     return menus;
   }
@@ -219,15 +242,24 @@ class FileListMenuAnchor extends StatelessWidget {
     );
   }
 
-  void _addMenus(
-    List<Widget> menuWidgets,
-    MenuGroupEntity menuGroup,
-    OnMenuClickCallback? onMenuClickCallback,
-  ) {
+  bool _addMenus({
+    required List<Widget> menuWidgets,
+    required MenuGroupEntity menuGroup,
+    required OnMenuClickCallback? onMenuClickCallback,
+    required bool bindFirstFocusNode,
+  }) {
     final menuEntities = menuGroup.children;
+    var shouldBindFocusNode = bindFirstFocusNode;
     for (int i = 0; i < menuEntities.length; i++) {
       final menuEntity = menuEntities[i];
+      final isFirstFocusableItem = shouldBindFocusNode;
+      final focusNode =
+          isFirstFocusableItem ? controller.firstMenuItemFocusNode : null;
+      if (isFirstFocusableItem) {
+        shouldBindFocusNode = false;
+      }
       final menu = Obx(() => MenuItemButton(
+            focusNode: focusNode,
             onPressed: () {
               if (onMenuClickCallback != null) {
                 if (menuEntity.menuGroupId == MenuGroupId.sort) {
@@ -263,6 +295,7 @@ class FileListMenuAnchor extends StatelessWidget {
         menuWidgets.add(const Divider());
       }
     }
+    return shouldBindFocusNode;
   }
 }
 

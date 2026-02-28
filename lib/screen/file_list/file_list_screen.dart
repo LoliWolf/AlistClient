@@ -252,6 +252,7 @@ class _FileListScreenState extends State<FileListScreen>
   @override
   void dispose() {
     super.dispose();
+    _menuAnchorController.dispose();
     _userStreamSubscription?.cancel();
     _cancelToken?.cancel();
     Log.d("dispose", tag: tag);
