@@ -66,6 +66,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
   bool _showOverlay = false;
   int _countdownSeconds = 0;
   bool _imageFailedScheduled = false;
+  int _activeRenderGeneration = 0;
+  int _imageCountdownStartedGeneration = -1;
   String? _errorText;
   DateTime _ignoreVideoErrorsUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _awaitingAndroidNativeVideoReturn = false;
@@ -467,6 +469,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
     }
 
     _imageFailedScheduled = false;
+    _activeRenderGeneration += 1;
+    _imageCountdownStartedGeneration = -1;
     _cancelCountdown();
     _ignoreVideoErrorsUntil =
         DateTime.now().add(const Duration(milliseconds: 800));
@@ -498,23 +502,48 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
     switch (item.mediaType) {
       case _ProjectorMediaType.image:
         debugPrint("Projector: type is image");
-        if (mounted && !skipLoadingIndicator) {
-          // Delay slightly to ensure loading spinner is seen if needed, but mainly to break sync flow
-          await Future.delayed(const Duration(milliseconds: 50));
-          if (mounted && _loading) {
-            debugPrint("Projector: setting state loading=false");
-            setState(() {
-              _loading = false;
-            });
-          }
-        }
-        _startCountdown(_config.imageStaySeconds);
         return null;
       case _ProjectorMediaType.video:
         return _playVideo(item, url);
       case _ProjectorMediaType.audio:
         return _playAudio(item, url);
     }
+  }
+
+  void _onCurrentImageFrameAvailable() {
+    if (!mounted) {
+      return;
+    }
+    final currentItem = _currentItem;
+    if (currentItem == null ||
+        currentItem.mediaType != _ProjectorMediaType.image) {
+      return;
+    }
+    final generation = _activeRenderGeneration;
+    if (_imageCountdownStartedGeneration == generation) {
+      return;
+    }
+    _imageCountdownStartedGeneration = generation;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final activeItem = _currentItem;
+      if (activeItem == null ||
+          activeItem.mediaType != _ProjectorMediaType.image) {
+        return;
+      }
+      if (_activeRenderGeneration != generation ||
+          _imageCountdownStartedGeneration != generation) {
+        return;
+      }
+      if (_loading) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      _startCountdown(_config.imageStaySeconds);
+    });
   }
 
   Future<String?> _playVideo(_ProjectorMediaItem item, String url) async {
@@ -857,6 +886,12 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         url,
         fit: BoxFit.contain,
         gaplessPlayback: true,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded || frame != null) {
+            _onCurrentImageFrameAvailable();
+          }
+          return child;
+        },
         errorBuilder: (context, error, stackTrace) {
           if (!_imageFailedScheduled) {
             _imageFailedScheduled = true;
