@@ -68,6 +68,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
   bool _imageFailedScheduled = false;
   int _activeRenderGeneration = 0;
   int _imageCountdownStartedGeneration = -1;
+  int _timedCountdownStartedGeneration = -1;
   String? _errorText;
   DateTime _ignoreVideoErrorsUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _awaitingAndroidNativeVideoReturn = false;
@@ -181,6 +182,11 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
       if (newState == FlutterAvpdef.AVPStatus_AVPStatusPrepared ||
           newState == FlutterAvpdef.AVPStatus_AVPStatusStarted ||
           newState == FlutterAvpdef.AVPStatus_AVPStatusPaused) {
+        _startTimedCountdownIfNeeded(
+          mediaType: _ProjectorMediaType.video,
+          enabled: !_config.videoStayInfinite,
+          seconds: _config.videoStaySeconds,
+        );
         if (_loading) {
           setState(() {
             _loading = false;
@@ -194,10 +200,17 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         return;
       }
 
-      if (_loading && state.processingState == ProcessingState.ready) {
-        setState(() {
-          _loading = false;
-        });
+      if (state.processingState == ProcessingState.ready) {
+        _startTimedCountdownIfNeeded(
+          mediaType: _ProjectorMediaType.audio,
+          enabled: !_config.audioStayInfinite,
+          seconds: _config.audioStaySeconds,
+        );
+        if (_loading) {
+          setState(() {
+            _loading = false;
+          });
+        }
       }
       if (state.processingState == ProcessingState.completed) {
         _onCurrentMediaCompleted();
@@ -471,6 +484,7 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
     _imageFailedScheduled = false;
     _activeRenderGeneration += 1;
     _imageCountdownStartedGeneration = -1;
+    _timedCountdownStartedGeneration = -1;
     _cancelCountdown();
     _ignoreVideoErrorsUntil =
         DateTime.now().add(const Duration(milliseconds: 800));
@@ -546,6 +560,26 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
     });
   }
 
+  void _startTimedCountdownIfNeeded({
+    required _ProjectorMediaType mediaType,
+    required bool enabled,
+    required int seconds,
+  }) {
+    if (!enabled) {
+      return;
+    }
+    final currentItem = _currentItem;
+    if (currentItem == null || currentItem.mediaType != mediaType) {
+      return;
+    }
+    final generation = _activeRenderGeneration;
+    if (_timedCountdownStartedGeneration == generation) {
+      return;
+    }
+    _timedCountdownStartedGeneration = generation;
+    _startCountdown(seconds);
+  }
+
   Future<String?> _playVideo(_ProjectorMediaItem item, String url) async {
     if (Platform.isAndroid) {
       return _playVideoWithAndroidNativePlayer(item, url);
@@ -560,9 +594,6 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
       debugPrint("Projector playing video: ${item.path}, url=$playUrl");
       await _videoPlayer.setUrl(playUrl);
       await _videoPlayer.prepare();
-      if (!_config.videoStayInfinite) {
-        _startCountdown(_config.videoStaySeconds);
-      }
       return null;
     } catch (e) {
       debugPrint("Projector video play failed: $e");
@@ -598,6 +629,8 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         headers.isEmpty ? null : headers,
         playerType,
         finishOnComplete: true,
+        autoCloseAfterSeconds:
+            _config.videoStayInfinite ? null : _config.videoStaySeconds,
       );
       if (mounted) {
         setState(() {
@@ -625,9 +658,6 @@ class _ProjectorPlayerScreenState extends State<ProjectorPlayerScreen>
         ),
       );
       await _audioPlayer.play();
-      if (!_config.audioStayInfinite) {
-        _startCountdown(_config.audioStaySeconds);
-      }
       return null;
     } catch (e) {
       debugPrint("Projector audio play failed: $e");

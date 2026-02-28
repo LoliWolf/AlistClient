@@ -43,6 +43,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     private var headersStr = "{}"
     private var playerType = ""
     private var finishOnComplete = false
+    private var autoCloseAfterSeconds = 0
     private var videos: List<VideoItem> = emptyList()
     private var headers: Map<String, String> = emptyMap()
     private var index = 0
@@ -57,12 +58,17 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     private var isPlay = true
 
     private val messageRecordWatchTime = 1
+    private val messageProjectorAutoClose = 2
     private val handler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
             if (msg.what == messageRecordWatchTime) {
                 saveCurrentTime()
                 // 每30s记录一次播放进度
                 sendEmptyMessageDelayed(messageRecordWatchTime, 30 * 1000)
+                return
+            }
+            if (msg.what == messageProjectorAutoClose) {
+                finishWithProjectorResult(completed = true)
             }
         }
     }
@@ -90,6 +96,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
         index = args?.getInt("index", 0) ?: index
         playerType = args?.getString("playerType") ?: ""
         finishOnComplete = args?.getBoolean("finishOnComplete", false) ?: false
+        autoCloseAfterSeconds = args?.getInt("autoCloseAfterSeconds", 0) ?: 0
         if (videosStr.isNotEmpty()) {
             videos = GsonUtils.parseList(videosStr)
         }
@@ -136,6 +143,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
                     //开始播放了才能旋转和全屏
                     orientationUtils.isEnable = true
                     isPlay = true
+                    scheduleProjectorAutoCloseIfNeeded()
                     handler.removeMessages(messageRecordWatchTime)
                     // 延时 30 秒记录一次播放进度
                     handler.sendEmptyMessageDelayed(messageRecordWatchTime, 30 * 1000)
@@ -151,6 +159,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
 
                 override fun onAutoComplete(url: String?, vararg objects: Any?) {
                     super.onAutoComplete(url, *objects)
+                    cancelProjectorAutoClose()
                     if (isFinishing) {
                         return
                     }
@@ -237,6 +246,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     }
 
     private fun startPlay(index: Int, video: VideoItem) {
+        cancelProjectorAutoClose()
         val playUrl = if (video.localPath.isNullOrEmpty()) video.url else video.localPath
         gsyVideoPlayer.currentPlayer.setUp(playUrl, false, video.name.substringBeforeLast("."))
         if (finishOnComplete) {
@@ -308,6 +318,7 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        cancelProjectorAutoClose()
         if (isPlay) {
             gsyVideoPlayer.currentPlayer.release()
         }
@@ -342,11 +353,27 @@ class PlayerActivity : AppCompatActivity(), GSYVideoProgressListener {
     }
 
     private fun finishWithProjectorResult(completed: Boolean) {
+        cancelProjectorAutoClose()
         setResult(
             Activity.RESULT_OK,
             Intent().putExtra("projectorCompleted", completed)
         )
         finish()
+    }
+
+    private fun scheduleProjectorAutoCloseIfNeeded() {
+        cancelProjectorAutoClose()
+        if (autoCloseAfterSeconds <= 0) {
+            return
+        }
+        handler.sendEmptyMessageDelayed(
+            messageProjectorAutoClose,
+            autoCloseAfterSeconds * 1000L
+        )
+    }
+
+    private fun cancelProjectorAutoClose() {
+        handler.removeMessages(messageProjectorAutoClose)
     }
 
     inner class PlayerWrapper(val videoPlayer: AlistClientVideoPlayer) {

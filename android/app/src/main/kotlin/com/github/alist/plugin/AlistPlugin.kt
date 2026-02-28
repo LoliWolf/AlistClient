@@ -99,6 +99,7 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
                 val headers = call.argument<String?>("headers")
                 val playerType = call.argument<String>("playerType")
                 val finishOnComplete = call.argument<Boolean>("finishOnComplete") ?: false
+                val autoCloseAfterSeconds = call.argument<Int?>("autoCloseAfterSeconds")
 
                 val intent = Intent(activity, PlayerActivity::class.java)
                 intent.putExtra("videos", videos)
@@ -106,6 +107,9 @@ class AlistPlugin(private val activity: Activity, private val scope: CoroutineSc
                 intent.putExtra("headers", headers)
                 intent.putExtra("playerType", playerType)
                 intent.putExtra("finishOnComplete", finishOnComplete)
+                if (autoCloseAfterSeconds != null && autoCloseAfterSeconds > 0) {
+                    intent.putExtra("autoCloseAfterSeconds", autoCloseAfterSeconds)
+                }
                 activity.startActivityForResult(intent, requestCodeLaunchInternalPlayer)
                 result.success(true)
             }

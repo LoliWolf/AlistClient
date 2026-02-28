@@ -81,7 +81,8 @@ class AlistPlugin {
       int index,
       Map<String, String>? headers,
       String? playerType,
-      {bool finishOnComplete = false}) async {
+      {bool finishOnComplete = false,
+      int? autoCloseAfterSeconds}) async {
     String? headersStr = headers != null ? jsonEncode(headers) : null;
 
     var result =
@@ -91,6 +92,7 @@ class AlistPlugin {
       "headers": headersStr,
       "playerType": playerType,
       "finishOnComplete": finishOnComplete,
+      "autoCloseAfterSeconds": autoCloseAfterSeconds,
     });
     return result == true;
   }
